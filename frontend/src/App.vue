@@ -83,7 +83,7 @@
         <span class="muted">💡 您可以在下方问题中调整上述配置</span>
       </div>
 
-      <div class="qbox" v-for="q in questions" :key="q.key">
+      <div class="qbox" v-for="q in questions" :key="q.key" v-show="shouldShowQuestion(q)">
         <div class="qtitle">
           <pre class="question-text">{{ q.question }}</pre>
         </div>
@@ -232,6 +232,16 @@ function getStageLabel(stage) {
     'confirmed': '已确认'
   }
   return labels[stage] || stage
+}
+
+// 判断是否显示某个问题（用于条件依赖的问题）
+function shouldShowQuestion(q) {
+  // 自定义课时输入框只在选择"自定义"时显示
+  if (q.key === 'custom_lesson_duration') {
+    return answers['lesson_duration_config'] === '自定义'
+  }
+  // 其他问题默认显示
+  return true
 }
 
 // 是否可以提交（至少有一个问题有答案或者问题是可选的）

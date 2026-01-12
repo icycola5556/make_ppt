@@ -70,3 +70,6 @@ backend/data/sessions/*
 # 操作系统
 Thumbs.db
 .DS_Store
+
+# Documents
+docs/

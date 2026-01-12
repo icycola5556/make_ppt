@@ -9,8 +9,7 @@ from .schemas import (
     SubjectInfo, KnowledgePointDetail, KnowledgeStructure, TeachingScenarioDetail,
     TeachingObjectivesStructured, SlideRequirementsDetail, CaseRequirement,
     ExerciseRequirement, InteractionRequirement, WarningRequirement,
-    SpecialRequirementsDetailed, PageDistribution, ParsingMetadata,
-    ConfirmationStatusDetail
+    SpecialRequirementsDetailed, PageDistribution, ParsingMetadata
 )
 from .standards import default_goals
 
@@ -164,23 +163,54 @@ SCENE_DISPLAY_NAMES = {
 
 
 def update_page_distribution(req: TeachingRequest) -> None:
-    """Calculate and update estimated page distribution based on current request state."""
+    """Calculate and update estimated page distribution based on current request state.
+    
+    改进的页面分配算法：
+    - 封面/目标/总结: 各1页（固定）
+    - 导入: 1页
+    - 概念定义: 每个知识点1页
+    - 讲解: 根据知识点难度（easy=1页, medium=2页, hard=3页）
+    - 案例: 每个案例1页（最多3页）
+    - 习题: 每3道题1页，向上取整
+    - 互动: 根据互动类型数量（每类型1页，最多2页）
+    """
+    import math
+    
     kp_count = len(req.knowledge_points) or 1
     
-    # Logic: 
-    # Cover(1), Objectives(1), Intro(1)
-    # Concept(kp_count), Explanation(kp_count * 2)
-    # Cases(case_count if enabled), Exercises(1 if enabled)
-    # Summary(1)
+    # 讲解页数：根据知识点难度动态计算
+    # easy=1页, medium=2页, hard=3页
+    DIFFICULTY_PAGES = {"easy": 1, "medium": 2, "hard": 3}
+    explanation_pages = 0
+    for kp in req.knowledge_points:
+        difficulty = kp.difficulty_level or "medium"
+        explanation_pages += DIFFICULTY_PAGES.get(difficulty, 2)
+    # 确保至少有基础页数
+    if explanation_pages == 0:
+        explanation_pages = kp_count * 2
+    
+    # 案例页数：每个案例1页，但最多3页（超过则合并展示）
+    case_count = req.special_requirements.cases.count if req.special_requirements.cases.enabled else 0
+    case_pages = min(case_count, 3) if case_count > 0 else 0
+    
+    # 习题页数：每页约3道题，向上取整
+    exercise_count = req.special_requirements.exercises.total_count if req.special_requirements.exercises.enabled else 0
+    EXERCISES_PER_PAGE = 3
+    exercise_pages = math.ceil(exercise_count / EXERCISES_PER_PAGE) if exercise_count > 0 else 0
+    
+    # 互动页数：根据互动类型数量（每种类型1页，最多2页）
+    interaction_types = req.special_requirements.interaction.types if req.special_requirements.interaction.enabled else []
+    interaction_pages = min(len(interaction_types), 2) if interaction_types else 0
     
     dist = PageDistribution(
         cover=1,
         objectives=1,
         introduction=1,
         concept_definition=kp_count,
-        explanation=kp_count * 2,
-        case_study=req.special_requirements.cases.count if req.special_requirements.cases.enabled else 0,
-        exercises=1 if req.special_requirements.exercises.enabled else 0,
+        explanation=explanation_pages,
+        case_study=case_pages,
+        exercises=exercise_pages,
+        interaction=interaction_pages,
         summary=1
     )
     req.estimated_page_distribution = dist
@@ -270,6 +300,7 @@ def generate_display_summary(req: TeachingRequest) -> str:
     if dist.explanation: parts.append(f"讲解({dist.explanation})")
     if dist.case_study: parts.append(f"案例({dist.case_study})")
     if dist.exercises: parts.append(f"习题({dist.exercises})")
+    if dist.interaction: parts.append(f"互动({dist.interaction})")
     if dist.summary: parts.append(f"总结({dist.summary})")
     lines.append("   " + " + ".join(parts))
     
@@ -412,8 +443,7 @@ def _assess_teaching_scene(user_text: str, knowledge_points: List[KnowledgePoint
     )
     req.parsing_metadata = ParsingMetadata(
         raw_input=user_text,
-        parsing_method="heuristic",
-        confidence_score=0.7
+        parsing_method="heuristic"
     )
     
     # Initialize distribution
@@ -1001,8 +1031,7 @@ def apply_user_answers(req: TeachingRequest, answers: Dict[str, Any]) -> Teachin
             val = str(answers["final_confirm"]).strip()
             if "确认" in val or "开始" in val:
                 req.interaction_stage = "confirmed"
-                req.confirmation_status.overall_status = "confirmed"
-                req.confirmation_status.user_confirmed = True
+                # Note: confirmation_status removed in JSON Schema refactoring
             else:
                 # 返回修改，回到 adjust_configurations 阶段
                 req.interaction_stage = "adjust_configurations"
