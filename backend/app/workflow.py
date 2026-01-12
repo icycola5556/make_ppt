@@ -742,8 +742,7 @@ class WorkflowEngine:
                 # 保持原有的元数据
                 optimized_request.parsing_metadata = current_request.parsing_metadata
                 optimized_request.interaction_stage = "confirmed"
-                optimized_request.confirmation_status.overall_status = "confirmed"
-                optimized_request.confirmation_status.user_confirmed = True
+                # Note: confirmation_status removed in JSON Schema refactoring
 
                 return optimized_request
 

@@ -277,8 +277,7 @@ class LangGraphWorkflowEngine:
                 req = autofill_defaults(req)
                 req.display_summary = generate_display_summary(req)
                 req.interaction_stage = "confirmed"
-                req.confirmation_status.overall_status = "confirmed"
-                req.confirmation_status.user_confirmed = True
+                # Note: confirmation_status removed in JSON Schema refactoring
 
                 state["teaching_request"] = req
                 state["_session_state"].teaching_request = req

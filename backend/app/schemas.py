@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 TeachingScene = Literal["theory", "practice", "review", "unknown"]
@@ -100,23 +100,19 @@ class PageDistribution(BaseModel):
     explanation: int = 0
     case_study: int = 0
     exercises: int = 0
+    interaction: int = 0  # 互动页（问答、讨论等）
     summary: int = 1
 
 class ParsingMetadata(BaseModel):
+    """Simplified metadata - removed unused fields (借鉴 Presenton)"""
     raw_input: Optional[str] = None
     input_source: str = "text"
     parsing_method: Literal["llm_extraction", "llm_extraction_with_tools", "heuristic", "mixed"] = "mixed"
-    confidence_score: float = 0.0
-    ambiguous_fields: List[str] = Field(default_factory=list)
-    auto_filled_fields: List[str] = Field(default_factory=list)
     request_id: Optional[str] = None
     timestamp: Optional[str] = None
 
-class ConfirmationStatusDetail(BaseModel):
-    overall_status: Literal["initial", "pending_user_review", "confirmed"] = "initial"
-    fields_to_confirm: List[str] = Field(default_factory=list)
-    user_confirmed: bool = False
-    confirmation_required: bool = True
+# ConfirmationStatusDetail 已移除 - 状态合并到 TeachingRequest.stage (借鉴 PPTAgent)
+# 保留注释说明迁移原因
 
 class TeachingRequest(BaseModel):
     """Refactored Module 3.1 output: highly structured teaching requirements."""
@@ -136,53 +132,85 @@ class TeachingRequest(BaseModel):
     
     estimated_page_distribution: PageDistribution = Field(default_factory=PageDistribution)
     parsing_metadata: ParsingMetadata = Field(default_factory=ParsingMetadata)
-    confirmation_status: ConfirmationStatusDetail = Field(default_factory=ConfirmationStatusDetail)
-
-    # Legacy fields (for compatibility during transition, or keep if still useful)
-    interaction_stage: Literal[
-        "initial",
-        "supplementing_kp",
-        "confirm_kp",
-        "confirm_pages",
-        "check_additional_kps",
-        "add_additional_kps",
-        "ask_config_modification",
-        "adjust_configurations",
-        "confirm_goals",
-        "final_confirm",
-        "confirmed"
-    ] = "initial"
+    
+    # ===== 内部状态字段 (保持状态机逻辑) =====
+    # 用于内部多轮交互逻辑，使用 exclude=True 从对外 API 隐藏
+    internal_interaction_stage: Literal[
+        "initial", "supplementing_kp", "confirm_kp", "confirm_pages",
+        "check_additional_kps", "add_additional_kps", "ask_config_modification",
+        "adjust_configurations", "confirm_goals", "final_confirm", "confirmed"
+    ] = Field(default="initial", exclude=False)
     
     display_summary: Optional[str] = None
     
     # Interaction metadata for tracking user modifications
     interaction_metadata: Dict[str, Any] = Field(default_factory=dict)
-
-    # Helper properties for legacy code compatibility
+    
+    # ===== 扁平化高频字段 (借鉴 Presenton) =====
+    # 这些字段会出现在 JSON 输出顶层，便于访问
+    @computed_field
+    @property
+    def stage(self) -> Literal["parsing", "confirming", "ready"]:
+        """Simplified stage for external API (借鉴 PPTAgent)"""
+        if self.internal_interaction_stage in ["initial", "supplementing_kp"]:
+            return "parsing"
+        elif self.internal_interaction_stage == "confirmed":
+            return "ready"
+        else:
+            return "confirming"
+    
+    @computed_field
     @property
     def subject(self) -> Optional[str]:
+        """扁平化字段：学科名称"""
         return self.subject_info.subject_name
     
+    @computed_field
+    @property
+    def professional_category(self) -> ProfessionalCategory:
+        """扁平化字段：专业领域"""
+        return self.subject_info.subject_category
+    
+    @computed_field
+    @property
+    def teaching_scene(self) -> TeachingScene:
+        """扁平化字段：教学场景"""
+        return self.teaching_scenario.scene_type
+    
+    @computed_field
+    @property
+    def n_slides(self) -> Optional[int]:
+        """扁平化字段：目标页数 (借鉴 Presenton 命名)"""
+        return self.slide_requirements.target_count
+    
+    # 兼容性别名 - 用于内部状态机逻辑
+    @property
+    def interaction_stage(self) -> str:
+        return self.internal_interaction_stage
+    
+    @interaction_stage.setter
+    def interaction_stage(self, value):  # type: ignore
+        self.internal_interaction_stage = value
+
+    # ===== Setters for backward compatibility =====
+    # 允许现有代码通过 req.subject = "xxx" 赋值
     @subject.setter
     def subject(self, value: Optional[str]):
         self.subject_info.subject_name = value
-        
-    @property
-    def professional_category(self) -> ProfessionalCategory:
-        return self.subject_info.subject_category
     
     @professional_category.setter
     def professional_category(self, value: ProfessionalCategory):
         self.subject_info.subject_category = value
-        
-    @property
-    def teaching_scene(self) -> TeachingScene:
-        return self.teaching_scenario.scene_type
     
     @teaching_scene.setter
     def teaching_scene(self, value: TeachingScene):
         self.teaching_scenario.scene_type = value
+    
+    @n_slides.setter
+    def n_slides(self, value: Optional[int]):
+        self.slide_requirements.target_count = value
         
+    # 保留其他 legacy 属性
     @property
     def slide_count(self) -> Optional[int]:
         return self.slide_requirements.target_count
@@ -305,6 +333,7 @@ class Question(BaseModel):
     question: str
     input_type: Literal["text", "select", "number", "bool", "list", "confirm_or_add"] = "text"
     options: Optional[List[str]] = None
+    placeholder: Optional[str] = None
     required: bool = True
 
 
