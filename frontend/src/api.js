@@ -34,10 +34,11 @@ export const api = {
   createSession() { return http('/api/session', { method: 'POST' }) },
   // NOTE: backend expects field name `user_text`.
   // Added stop_at parameter for module testing
-  runWorkflow(session_id, userText, answers = {}, auto_fill_defaults = false, stop_at = null) {
+  // Added style_name parameter for test mode 3.1->3.3
+  runWorkflow(session_id, userText, answers = {}, auto_fill_defaults = false, stop_at = null, style_name = null) {
     return http('/api/workflow/run', {
       method: 'POST',
-      body: { session_id, user_text: userText, answers, auto_fill_defaults, stop_at }
+      body: { session_id, user_text: userText, answers, auto_fill_defaults, stop_at, style_name }
     })
   },
   getSession(session_id) { return http(`/api/session/${session_id}`) },

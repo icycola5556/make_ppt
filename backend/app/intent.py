@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -135,6 +136,125 @@ def check_slide_count_conflict(req: TeachingRequest) -> bool:
     if req.slide_requirements.min_count is None:
         return False
     return req.slide_requirements.target_count < req.slide_requirements.min_count
+
+
+# ============================================================================
+# LLM推荐页数功能
+# ============================================================================
+
+async def recommend_slide_count_with_llm(
+    req: TeachingRequest,
+    llm: Any,  # LLMClient
+    logger: Any,  # WorkflowLogger
+    session_id: str,
+) -> Tuple[Optional[int], Optional[str]]:
+    """使用LLM分析教学需求，推荐合适的页数范围。
+    
+    Args:
+        req: 教学需求对象
+        llm: LLM客户端
+        logger: 日志记录器
+        session_id: 会话ID
+        
+    Returns:
+        (recommended_count, explanation): 推荐的页数和说明
+        如果LLM未启用或调用失败，返回(None, None)
+    """
+    if not llm.is_enabled():
+        return None, None
+    
+    system_prompt = """你是高职教学课件页数规划专家。请根据教学需求分析，推荐合适的课件页数。
+
+## 分析维度
+1. **知识点复杂度**：考虑知识点数量、难度、类型（理论/实操）
+2. **教学内容量**：概念讲解、案例展示、练习巩固等各部分所需页数
+3. **教学场景特点**：理论课、实训课、复习课的不同需求
+4. **特殊需求**：案例数、习题数、互动环节等对页数的影响
+
+## 推荐原则
+- 确保核心教学内容完整，不遗漏关键知识点
+- 平衡内容深度和教学时间
+- 考虑高职学生的认知特点，避免信息过载
+- 为互动和练习预留合理空间
+
+## 输出要求
+返回JSON格式：
+{
+  "recommended_count": 整数（推荐的最小页数）,
+  "explanation": "推荐理由的详细说明（中文）"
+}
+
+只输出JSON，不要解释。"""
+
+    user_payload = {
+        "knowledge_points": [
+            {
+                "name": kp.name,
+                "type": kp.type,
+                "difficulty_level": kp.difficulty_level,
+            }
+            for kp in req.knowledge_points
+        ],
+        "teaching_scene": req.teaching_scenario.scene_type,
+        "target_count": req.slide_requirements.target_count,
+        "min_count": req.slide_requirements.min_count,
+        "special_requirements": {
+            "cases": {
+                "enabled": req.special_requirements.cases.enabled,
+                "count": req.special_requirements.cases.count,
+            },
+            "exercises": {
+                "enabled": req.special_requirements.exercises.enabled,
+                "total_count": req.special_requirements.exercises.total_count,
+            },
+            "interaction": {
+                "enabled": req.special_requirements.interaction.enabled,
+            },
+        },
+        "estimated_distribution": req.estimated_page_distribution.model_dump() if req.estimated_page_distribution else None,
+    }
+    
+    user_msg = json.dumps(user_payload, ensure_ascii=False, indent=2)
+    
+    schema_hint = {
+        "type": "object",
+        "properties": {
+            "recommended_count": {"type": "integer", "description": "推荐的页数"},
+            "explanation": {"type": "string", "description": "推荐理由说明"},
+        },
+        "required": ["recommended_count", "explanation"],
+    }
+    schema_str = json.dumps(schema_hint, ensure_ascii=False, indent=2)
+    
+    try:
+        logger.emit(session_id, "3.1", "llm_recommend_slide_count", {
+            "system": system_prompt,
+            "user": user_payload,
+        })
+        
+        parsed, meta = await llm.chat_json(
+            system_prompt,
+            user_msg,
+            schema_str,
+            temperature=0.3,
+        )
+        
+        logger.emit(session_id, "3.1", "llm_recommend_slide_count_response", meta)
+        
+        recommended_count = parsed.get("recommended_count")
+        explanation = parsed.get("explanation")
+        
+        # 确保推荐页数不小于最小页数
+        if recommended_count and req.slide_requirements.min_count:
+            recommended_count = max(recommended_count, req.slide_requirements.min_count)
+        
+        return recommended_count, explanation
+        
+    except Exception as e:
+        logger.emit(session_id, "3.1", "llm_recommend_slide_count_error", {
+            "error": str(e),
+        })
+        return None, None
 
 
 # ============================================================================
@@ -503,21 +623,8 @@ def validate_and_build_questions(req: TeachingRequest) -> Tuple[List[Question], 
 
     # ===== Stage: confirm_kp - Handle additional inputs =====
     if stage == "confirm_kp":
-        # 先检查页面数量冲突
-        if check_slide_count_conflict(req):
-            questions.append(
-                Question(
-                    key="slide_count_adjust",
-                    question=f"您期望 {req.slide_requirements.target_count} 页，但根据知识点数量，系统建议至少 {req.slide_requirements.min_count} 页。\n\n请选择：",
-                    input_type="select",
-                    options=[f"调整为 {req.slide_requirements.min_count} 页", f"保持 {req.slide_requirements.target_count} 页"],
-                    required=True,
-                )
-            )
-            return questions, ["confirm_pages"]
-
-        # 没有页面数量冲突，直接进入配置修改询问阶段
-        # 不需要用户输入，直接跳转到 ask_config_modification
+        # 不再在这里检查页面冲突，页面冲突检查移到confirm_goals阶段
+        # 直接进入配置修改询问阶段
         req.interaction_stage = "ask_config_modification"
         # 返回 ask_config_modification 阶段的问题
         questions.append(
@@ -721,18 +828,37 @@ def validate_and_build_questions(req: TeachingRequest) -> Tuple[List[Question], 
         )
         return questions, ["confirm_goals"]
 
-    # ===== Stage: confirm_pages - Ask for teaching goals =====
+    # ===== Stage: confirm_pages - Handle page count selection =====
     if stage == "confirm_pages":
+        # 检查是否需要显示自定义页数输入框
+        needs_custom_input = req.interaction_metadata.get("needs_custom_slide_count", False)
+        
+        if needs_custom_input:
+            # 用户选择了自定义页数，需要输入
+            questions.append(
+                Question(
+                    key="custom_slide_count",
+                    question=f"请输入目标页数：\n\n当前最小建议页数：{req.slide_requirements.min_count} 页\n\n如果输入的页数仍小于建议值，系统会在后续进行智能调整。",
+                    input_type="number",
+                    placeholder=f"例如：{req.slide_requirements.min_count}",
+                    required=True,
+                )
+            )
+            return questions, ["confirm_pages"]
+        
+        # 页面数量确认完成，继续到最终确认
+        # 不再询问教学目标（已在之前阶段处理），直接进入最终确认
+        summary = generate_display_summary(req)
         questions.append(
             Question(
-                key="teaching_goals_input",
-                question=f"教学目标（可选）：\n\n系统将自动生成默认目标，您也可以自定义输入：",
-                input_type="text",
-                placeholder="留空使用系统默认目标",
-                required=False,
+                key="final_confirm",
+                question=f"{summary}\n\n✅ 请确认以上信息无误后将进入下一步：",
+                input_type="select",
+                options=["确认，开始生成", "返回修改"],
+                required=True,
             )
         )
-        return questions, ["confirm_goals"]
+        return questions, ["final_confirm"]
 
     # ===== Stage: confirm_defaults - Confirm or adjust default configurations =====
     if stage == "confirm_defaults":
@@ -766,8 +892,57 @@ def validate_and_build_questions(req: TeachingRequest) -> Tuple[List[Question], 
         )
         return questions, ["confirm_goals"]
 
-    # ===== Stage: confirm_goals - Final confirmation =====
+    # ===== Stage: confirm_goals - Check page conflict before final confirmation =====
     if stage == "confirm_goals":
+        # 在显示最终确认之前，先检查页面冲突
+        if check_slide_count_conflict(req):
+            # 检查是否有LLM推荐结果
+            recommended_count = req.slide_requirements.llm_recommended_count
+            # 从interaction_metadata或临时属性中获取解释
+            explanation = req.interaction_metadata.get("_llm_recommendation_explanation") or getattr(req, '_llm_recommendation_explanation', None)
+            
+            if recommended_count and explanation:
+                # 使用LLM推荐结果
+                question_text = f"""⚠️ 页面数量冲突检测
+
+您期望的页数：{req.slide_requirements.target_count} 页
+系统建议的最小页数：{req.slide_requirements.min_count} 页
+AI推荐页数：{recommended_count} 页
+
+📊 推荐理由：
+{explanation}
+
+请选择处理方式："""
+                
+                options = [
+                    f"✅ 接受推荐（调整为 {recommended_count} 页）",
+                    "✏️ 自定义页数",
+                    f"⚠️ 保持原页数（{req.slide_requirements.target_count} 页，后续会智能调整）"
+                ]
+            else:
+                # 没有LLM推荐，使用简单提示
+                question_text = f"您期望 {req.slide_requirements.target_count} 页，但根据知识点数量，系统建议至少 {req.slide_requirements.min_count} 页。\n\n请选择："
+                options = [
+                    f"调整为 {req.slide_requirements.min_count} 页",
+                    f"保持 {req.slide_requirements.target_count} 页"
+                ]
+            
+            questions.append(
+                Question(
+                    key="slide_count_adjust",
+                    question=question_text,
+                    input_type="select",
+                    options=options,
+                    required=True,
+                    recommended_count=recommended_count,
+                    explanation=explanation,
+                )
+            )
+            # 注意：这里不直接修改interaction_stage，让apply_user_answers根据用户选择来处理
+            # 但返回confirm_pages作为提示，表示下一步可能是confirm_pages
+            return questions, ["confirm_pages"]
+        
+        # 没有页面冲突，直接显示最终确认
         summary = generate_display_summary(req)
         questions.append(
             Question(
@@ -854,11 +1029,7 @@ def apply_user_answers(req: TeachingRequest, answers: Dict[str, Any]) -> Teachin
 
     # ===== Stage: confirm_kp → ask_config_modification =====
     elif current_stage == "confirm_kp":
-        # 处理页面数量调整
-        if "slide_count_adjust" in answers:
-            val = str(answers["slide_count_adjust"]).strip()
-            if "调整" in val:
-                req.slide_requirements.target_count = req.slide_requirements.min_count
+        # 不再在这里处理页面冲突，页面冲突在confirm_goals阶段处理
         # 直接进入配置修改询问阶段
         req.interaction_stage = "ask_config_modification"
 
@@ -940,15 +1111,16 @@ def apply_user_answers(req: TeachingRequest, answers: Dict[str, Any]) -> Teachin
                 req.interaction_metadata["has_additional_kps"] = True
             req.interaction_stage = "ask_config_modification"
 
-    # ===== Stage: ask_config_modification → adjust_configurations or final_confirm =====
+    # ===== Stage: ask_config_modification → adjust_configurations or confirm_goals =====
     elif current_stage == "ask_config_modification":
         if "need_config_modification" in answers:
             if answers["need_config_modification"] == "需要修改":
                 req.interaction_stage = "adjust_configurations"
             else:
-                req.interaction_stage = "final_confirm"
+                # 不需要修改配置，进入confirm_goals阶段（这里会检查页面冲突）
+                req.interaction_stage = "confirm_goals"
 
-    # ===== Stage: adjust_configurations → final_confirm =====
+    # ===== Stage: adjust_configurations → confirm_goals =====
     elif current_stage == "adjust_configurations":
         # 处理配置调整
         if "lesson_duration_config" in answers:
@@ -998,8 +1170,8 @@ def apply_user_answers(req: TeachingRequest, answers: Dict[str, Any]) -> Teachin
         # 处理确认或重新调整
         if "confirm_all_adjustments" in answers:
             if answers["confirm_all_adjustments"] == "确认，开始最终优化":
-                # 确认所有调整，进入最终确认阶段
-                req.interaction_stage = "final_confirm"
+                # 确认所有调整，进入confirm_goals阶段（这里会检查页面冲突）
+                req.interaction_stage = "confirm_goals"
             else:
                 # 重新调整，保持在 adjust_configurations 阶段，让用户重新填写配置
                 req.interaction_stage = "adjust_configurations"
@@ -1009,16 +1181,89 @@ def apply_user_answers(req: TeachingRequest, answers: Dict[str, Any]) -> Teachin
     
     # ===== Stage: confirm_pages → confirm_goals =====
     elif current_stage == "confirm_pages":
-        if "teaching_goals_input" in answers:
-            val = str(answers["teaching_goals_input"]).strip()
-            if val:
-                req.teaching_objectives.knowledge = [val]
-                req.teaching_objectives.auto_generated = False
-        req.interaction_stage = "confirm_goals"
+        # 处理页面数量调整（从confirm_goals阶段跳转过来的）
+        if "slide_count_adjust" in answers:
+            val = str(answers["slide_count_adjust"]).strip()
+            if "接受推荐" in val or "✅" in val:
+                # 接受推荐页数
+                recommended = req.slide_requirements.llm_recommended_count
+                if recommended:
+                    req.slide_requirements.target_count = recommended
+                    req.slide_requirements.page_conflict_resolution = "accept_recommended"
+                else:
+                    # 如果没有推荐值，使用最小页数
+                    req.slide_requirements.target_count = req.slide_requirements.min_count
+                    req.slide_requirements.page_conflict_resolution = "accept_recommended"
+            elif "自定义" in val or "✏️" in val:
+                # 选择自定义页数，需要用户输入
+                req.interaction_metadata["needs_custom_slide_count"] = True
+                req.slide_requirements.page_conflict_resolution = "custom"
+                # 保持在confirm_pages阶段，等待用户输入自定义页数
+                return req
+            elif "保持原页数" in val or "⚠️" in val:
+                # 保持原页数
+                req.slide_requirements.page_conflict_resolution = "keep_original"
+            else:
+                # 默认处理：调整为最小页数
+                req.slide_requirements.target_count = req.slide_requirements.min_count
+        
+        # 处理自定义页数输入
+        if "custom_slide_count" in answers:
+            try:
+                custom_count = int(answers["custom_slide_count"])
+                min_count = req.slide_requirements.min_count or 0
+                # 确保自定义页数不小于最小页数（但允许用户选择，后续会智能调整）
+                if custom_count < min_count:
+                    # 仍然接受，但记录需要后续调整
+                    req.interaction_metadata["needs_smart_adjustment"] = True
+                req.slide_requirements.target_count = custom_count
+                req.slide_requirements.page_conflict_resolution = "custom"
+            except (ValueError, TypeError):
+                # 输入无效，使用最小页数
+                req.slide_requirements.target_count = req.slide_requirements.min_count
+        
+        # 清除自定义输入标记
+        req.interaction_metadata.pop("needs_custom_slide_count", None)
+        
+        # 更新页面分布
+        update_page_distribution(req)
+        
+        # 页面冲突处理完成，直接进入最终确认
+        req.interaction_stage = "final_confirm"
     
-    # ===== Stage: confirm_goals → final_confirm =====
+    # ===== Stage: confirm_goals → confirm_pages or final_confirm =====
     elif current_stage == "confirm_goals":
-        if "final_confirm" in answers:
+        # 如果用户选择了页面冲突处理，跳转到confirm_pages
+        if "slide_count_adjust" in answers:
+            val = str(answers["slide_count_adjust"]).strip()
+            if "自定义" in val or "✏️" in val:
+                # 选择自定义页数，需要用户输入
+                req.interaction_metadata["needs_custom_slide_count"] = True
+                req.slide_requirements.page_conflict_resolution = "custom"
+                req.interaction_stage = "confirm_pages"
+            else:
+                # 接受推荐或保持原页数，直接处理
+                if "接受推荐" in val or "✅" in val:
+                    recommended = req.slide_requirements.llm_recommended_count
+                    if recommended:
+                        req.slide_requirements.target_count = recommended
+                        req.slide_requirements.page_conflict_resolution = "accept_recommended"
+                    else:
+                        req.slide_requirements.target_count = req.slide_requirements.min_count
+                        req.slide_requirements.page_conflict_resolution = "accept_recommended"
+                elif "保持原页数" in val or "⚠️" in val:
+                    req.slide_requirements.page_conflict_resolution = "keep_original"
+                else:
+                    # 默认：调整为最小页数
+                    req.slide_requirements.target_count = req.slide_requirements.min_count
+                
+                # 更新页面分布
+                update_page_distribution(req)
+                # 继续到最终确认
+                req.interaction_stage = "final_confirm"
+        
+        # 处理最终确认
+        elif "final_confirm" in answers:
             val = str(answers["final_confirm"]).strip()
             if "确认" in val or "开始" in val:
                 req.interaction_stage = "final_confirm"

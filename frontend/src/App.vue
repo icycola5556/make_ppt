@@ -34,6 +34,27 @@
       <div class="muted">
         {{ testModeDescription }}
       </div>
+      <!-- Style Name 输入框（仅3.1->3.3模式显示） -->
+      <div v-if="showStyleNameInput" class="style-name-input" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+        <div class="row" style="align-items: flex-start;">
+          <div class="label" style="min-width: 100px;">Style Name:</div>
+          <div style="flex: 1;">
+            <input 
+              class="input" 
+              v-model="styleName" 
+              placeholder="可输入中文（理论课/实训课/复习课）或英文（theory_clean/practice_steps/review_mindmap）"
+              style="width: 100%;"
+            />
+            <div class="muted" style="margin-top: 6px; font-size: 13px;">
+              <strong>支持输入：</strong>
+              <br />
+              <span style="color: #059669;">中文：</span>理论课、实训课、复习课
+              <br />
+              <span style="color: #059669;">英文：</span>theory_clean、practice_steps、review_mindmap
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="card">
@@ -83,9 +104,32 @@
         <span class="muted">💡 您可以在下方问题中调整上述配置</span>
       </div>
 
-      <div class="qbox" v-for="q in questions" :key="q.key" v-show="shouldShowQuestion(q)">
+      <div class="qbox" v-for="q in questions" :key="q.key" v-show="shouldShowQuestion(q)" 
+           :class="{ 'page-conflict': q.key === 'slide_count_adjust' }">
         <div class="qtitle">
           <pre class="question-text">{{ q.question }}</pre>
+        </div>
+        
+        <!-- 页面冲突特殊显示 -->
+        <div v-if="q.key === 'slide_count_adjust' && teachingRequest" class="page-conflict-info">
+          <div class="conflict-stats">
+            <div class="stat-item">
+              <span class="stat-label">当前目标页数：</span>
+              <span class="stat-value current">{{ teachingRequest.slide_requirements?.target_count || '未设置' }}</span>
+            </div>
+            <div class="stat-item" v-if="teachingRequest.slide_requirements?.min_count">
+              <span class="stat-label">系统建议最小：</span>
+              <span class="stat-value min">{{ teachingRequest.slide_requirements.min_count }}</span>
+            </div>
+            <div class="stat-item" v-if="q.recommended_count">
+              <span class="stat-label">AI推荐页数：</span>
+              <span class="stat-value recommended">{{ q.recommended_count }}</span>
+            </div>
+          </div>
+          <div v-if="q.explanation" class="recommendation-explanation">
+            <strong>💡 推荐理由：</strong>
+            <p>{{ q.explanation }}</p>
+          </div>
         </div>
         
         <!-- Select options -->
@@ -101,12 +145,30 @@
           </button>
         </div>
         
+        <!-- 自定义页数输入框 -->
+        <div v-if="q.key === 'custom_slide_count'" class="custom-count-input">
+          <input 
+            type="number"
+            class="input" 
+            v-model="answers[q.key]" 
+            :placeholder="q.placeholder || '请输入页数...'"
+            :min="teachingRequest?.slide_requirements?.min_count || 1"
+          />
+          <div class="input-hint" v-if="teachingRequest?.slide_requirements?.min_count">
+            <span class="muted">提示：建议不少于 {{ teachingRequest.slide_requirements.min_count }} 页</span>
+            <span class="muted" style="display: block; margin-top: 4px;">
+              如果页数仍不够，系统会在后续进行智能调整
+            </span>
+          </div>
+        </div>
+        
         <!-- Text input (for text and list types) -->
         <input 
-          v-else
+          v-else-if="!q.options || !q.options.length"
           class="input" 
           v-model="answers[q.key]" 
-          :placeholder="q.placeholder || '请输入...'" 
+          :placeholder="q.placeholder || '请输入...'"
+          :type="q.input_type === 'number' ? 'number' : 'text'"
         />
       </div>
 
@@ -185,25 +247,69 @@ const testModes = [
   { value: 'full', label: '完整流程' },
   { value: '3.1', label: '仅 3.1 意图理解' },
   { value: '3.2', label: '仅 3.1→3.2' },
-  { value: '3.3', label: '仅 3.1→3.3' },
+  { value: '3.1-3.3', label: '仅 3.1→3.3（跳过3.2）' },
+  { value: '3.3', label: '3.1→3.3（3.1→3.2→3.3）' },
   { value: '3.4', label: '完整 3.1→3.4' },
 ]
 const testMode = ref('full')
+const styleName = ref('')  // 用于测试模式 3.1->3.3（跳过3.2）
 
 const testModeDescription = computed(() => {
   const descriptions = {
     'full': '执行完整工作流（3.1→3.2→3.3→3.4），显示所有模块结果',
     '3.1': '仅执行模块3.1（意图理解），返回TeachingRequest结构化数据',
     '3.2': '执行到模块3.2（风格设计），返回意图+风格配置',
-    '3.3': '执行到模块3.3（大纲生成），返回意图+风格+大纲',
+    '3.1-3.3': '从3.1直接到3.3（跳过3.2），需要手动输入style_name',
+    '3.3': '执行3.1→3.2→3.3，返回意图+风格+大纲',
     '3.4': '执行完整流程，与"完整流程"相同',
   }
   return descriptions[testMode.value] || ''
 })
 
+const showStyleNameInput = computed(() => {
+  return testMode.value === '3.1-3.3'
+})
+
+// 中文到英文的style_name映射
+const styleNameMap = {
+  '理论课': 'theory_clean',
+  '理论': 'theory_clean',
+  'theory_clean': 'theory_clean',
+  '实训课': 'practice_steps',
+  '实训': 'practice_steps',
+  'practice_steps': 'practice_steps',
+  '复习课': 'review_mindmap',
+  '复习': 'review_mindmap',
+  'review_mindmap': 'review_mindmap',
+}
+
+// 将用户输入转换为英文style_name
+function normalizeStyleName(input) {
+  if (!input) return null
+  const trimmed = input.trim()
+  // 直接查找映射
+  if (styleNameMap[trimmed]) {
+    return styleNameMap[trimmed]
+  }
+  // 如果已经是有效的英文值，直接返回
+  if (['theory_clean', 'practice_steps', 'review_mindmap'].includes(trimmed)) {
+    return trimmed
+  }
+  // 如果找不到匹配，返回原值（让后端处理或报错）
+  return trimmed
+}
+
 // 判断是否显示某个模块的结果
 function shouldShow(stage) {
   if (testMode.value === 'full' || testMode.value === '3.4') return true
+  if (testMode.value === '3.1-3.3') {
+    // 对于3.1-3.3模式（跳过3.2），不显示3.2的结果
+    if (stage === '3.2') return false
+    const order = ['3.1', '3.2', '3.3', '3.4']
+    const targetIdx = order.indexOf('3.3')
+    const stageIdx = order.indexOf(stage)
+    return stageIdx <= targetIdx
+  }
   const order = ['3.1', '3.2', '3.3', '3.4']
   const targetIdx = order.indexOf(testMode.value)
   const stageIdx = order.indexOf(stage)
@@ -239,6 +345,11 @@ function shouldShowQuestion(q) {
   // 自定义课时输入框只在选择"自定义"时显示
   if (q.key === 'custom_lesson_duration') {
     return answers['lesson_duration_config'] === '自定义'
+  }
+  // 自定义页数输入框只在选择"自定义页数"时显示
+  if (q.key === 'custom_slide_count') {
+    const slideAdjust = answers['slide_count_adjust']
+    return slideAdjust && (slideAdjust.includes('自定义') || slideAdjust.includes('✏️'))
   }
   // 其他问题默认显示
   return true
@@ -305,8 +416,30 @@ async function start() {
   try {
     const r = await api.createSession()
     sessionId.value = r.session_id || r.sessionId || r.session || r.session_id
-    const stopAt = testMode.value === 'full' ? null : testMode.value
-    await runOnce({ user_text: rawText.value, answers: {}, auto_fill_defaults: false, stop_at: stopAt })
+    // 根据测试模式确定stop_at和style_name
+    let stopAt = null
+    let styleNameValue = null
+    
+    if (testMode.value === '3.1-3.3') {
+      stopAt = '3.3'
+      styleNameValue = normalizeStyleName(styleName.value)
+      if (!styleNameValue) {
+        err.value = '请先输入 style_name（可输入：理论课/实训课/复习课 或 theory_clean/practice_steps/review_mindmap）'
+        busy.value = false
+        return
+      }
+    } else if (testMode.value !== 'full' && testMode.value !== '3.4') {
+      // 其他模式（包括旧的3.3模式），正常执行3.1->3.2->3.3
+      stopAt = testMode.value
+    }
+    
+    await runOnce({ 
+      user_text: rawText.value, 
+      answers: {}, 
+      auto_fill_defaults: false, 
+      stop_at: stopAt,
+      style_name: styleNameValue
+    })
   } catch (e) {
     err.value = e.message || String(e)
   } finally {
@@ -318,8 +451,30 @@ async function submitAnswers(useDefaults) {
   busy.value = true
   err.value = ''
   try {
-    const stopAt = testMode.value === 'full' ? null : testMode.value
-    await runOnce({ user_text: rawText.value, answers: useDefaults ? {} : answers, auto_fill_defaults: useDefaults, stop_at: stopAt })
+    // 根据测试模式确定stop_at和style_name
+    let stopAt = null
+    let styleNameValue = null
+    
+    if (testMode.value === '3.1-3.3') {
+      stopAt = '3.3'
+      styleNameValue = normalizeStyleName(styleName.value)
+      if (!styleNameValue) {
+        err.value = '请先输入 style_name（可输入：理论课/实训课/复习课 或 theory_clean/practice_steps/review_mindmap）'
+        busy.value = false
+        return
+      }
+    } else if (testMode.value !== 'full' && testMode.value !== '3.4') {
+      // 其他模式（包括旧的3.3模式），正常执行3.1->3.2->3.3
+      stopAt = testMode.value
+    }
+    
+    await runOnce({ 
+      user_text: rawText.value, 
+      answers: useDefaults ? {} : answers, 
+      auto_fill_defaults: useDefaults, 
+      stop_at: stopAt,
+      style_name: styleNameValue
+    })
   } catch (e) {
     err.value = e.message || String(e)
   } finally {
@@ -327,9 +482,9 @@ async function submitAnswers(useDefaults) {
   }
 }
 
-async function runOnce({ user_text, answers, auto_fill_defaults, stop_at }) {
+async function runOnce({ user_text, answers, auto_fill_defaults, stop_at, style_name }) {
   if (!sessionId.value) throw new Error('No session_id')
-  const res = await api.runWorkflow(sessionId.value, user_text, answers, auto_fill_defaults, stop_at)
+  const res = await api.runWorkflow(sessionId.value, user_text, answers, auto_fill_defaults, stop_at, style_name)
   if (res.status === 'need_user_input') {
     needUserInput.value = true
     questions.value = res.questions || []
@@ -514,5 +669,91 @@ async function runOnce({ user_text, answers, auto_fill_defaults, stop_at }) {
   border-color: #2563eb;
   background: #eff6ff;
   color: #2563eb;
+}
+
+/* 页面冲突特殊样式 */
+.qbox.page-conflict {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  border-width: 2px;
+}
+
+.page-conflict-info {
+  margin: 12px 0;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+}
+
+.conflict-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+.stat-value.current {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.stat-value.min {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.stat-value.recommended {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.recommendation-explanation {
+  margin-top: 12px;
+  padding: 10px;
+  background: #f0fdf4;
+  border-left: 3px solid #10b981;
+  border-radius: 4px;
+}
+
+.recommendation-explanation strong {
+  color: #059669;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.recommendation-explanation p {
+  margin: 0;
+  color: #166534;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.custom-count-input {
+  margin-top: 10px;
+}
+
+.input-hint {
+  margin-top: 8px;
+  font-size: 12px;
 }
 </style>
