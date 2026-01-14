@@ -11,6 +11,7 @@ const sessionId = ref('')
 const needUserInput = ref(false)
 const questions = ref([])
 const answers = reactive({})
+const currentStep = ref('') // 当前执行步骤
 
 // 工作流结果
 const teachingRequest = ref(null)
@@ -93,6 +94,7 @@ export function useWorkflow() {
         outline.value = null
         deckContent.value = null
         sessionState.value = null
+        currentStep.value = ''
     }
 
     async function createSession() {
@@ -102,31 +104,45 @@ export function useWorkflow() {
     }
 
     async function runWorkflow({ user_text, answers: ans = {}, auto_fill_defaults = false, stop_at = null, style_name = null }) {
-        if (!sessionId.value) {
-            await createSession()
-        }
+        busy.value = true
+        err.value = ''
 
-        const res = await api.runWorkflow(sessionId.value, user_text, ans, auto_fill_defaults, stop_at, style_name)
-
-        if (res.status === 'need_user_input') {
-            needUserInput.value = true
-            questions.value = res.questions || []
-            for (const q of questions.value) {
-                if (!(q.key in answers)) answers[q.key] = ''
+        try {
+            if (!sessionId.value) {
+                currentStep.value = '正在创建会话...'
+                await createSession()
             }
-            teachingRequest.value = res.teaching_request || null
-        } else if (res.status === 'ok') {
-            needUserInput.value = false
-            teachingRequest.value = res.teaching_request || null
-            styleConfig.value = res.style_config || null
-            outline.value = res.outline || null
-            deckContent.value = res.deck_content || null
-        } else if (res.status === 'error') {
-            throw new Error(res.message || 'workflow error')
-        }
 
-        sessionState.value = await api.getSession(sessionId.value)
-        return res
+            // 根据stop_at确定要执行的步骤
+            currentStep.value = '3.1 意图理解中...'
+
+            const res = await api.runWorkflow(sessionId.value, user_text, ans, auto_fill_defaults, stop_at, style_name)
+
+            if (res.status === 'need_user_input') {
+                currentStep.value = '等待用户确认...'
+                needUserInput.value = true
+                questions.value = res.questions || []
+                for (const q of questions.value) {
+                    if (!(q.key in answers)) answers[q.key] = ''
+                }
+                teachingRequest.value = res.teaching_request || null
+            } else if (res.status === 'ok') {
+                needUserInput.value = false
+                teachingRequest.value = res.teaching_request || null
+                styleConfig.value = res.style_config || null
+                outline.value = res.outline || null
+                deckContent.value = res.deck_content || null
+                currentStep.value = '完成'
+            } else if (res.status === 'error') {
+                currentStep.value = ''
+                throw new Error(res.message || 'workflow error')
+            }
+
+            sessionState.value = await api.getSession(sessionId.value)
+            return res
+        } finally {
+            busy.value = false
+        }
     }
 
     const logsHref = computed(() => sessionId.value ? api.logsUrl(sessionId.value) : '#')
@@ -141,6 +157,7 @@ export function useWorkflow() {
         needUserInput,
         questions,
         answers,
+        currentStep,  // 当前执行步骤
         // 结果
         teachingRequest,
         styleConfig,
