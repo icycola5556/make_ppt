@@ -113,7 +113,7 @@ import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
-const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, outline, reset, runWorkflow, normalizeStyleName, availableStyles } = useWorkflow()
+const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, outline, reset, runWorkflow, availableStyles } = useWorkflow()
 
 const testCaseList = testCases
 const rawText = ref('')
@@ -147,12 +147,11 @@ async function runOutline() {
       stop_at: '3.3'
     }
     if (skipStyle.value) {
-      const normalized = normalizeStyleName(styleName.value)
-      if (!normalized) {
-        err.value = '请输入 style_name'
+      if (!styleName.value) {
+        err.value = '请选择 style_name'
         return
       }
-      opts.style_name = normalized
+      opts.style_name = styleName.value
     }
     await runWorkflow(opts)
   } catch (e) {

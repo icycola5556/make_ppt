@@ -39,32 +39,11 @@ const testModeDescriptions = {
     '3.4': '执行完整流程，与"完整流程"相同',
 }
 
-// style_name映射
-const styleNameMap = {
-    '理论课': 'theory_clean',
-    '理论': 'theory_clean',
-    'theory_clean': 'theory_clean',
-    '实训课': 'practice_steps',
-    '实训': 'practice_steps',
-    'practice_steps': 'practice_steps',
-    '复习课': 'review_mindmap',
-    '复习': 'review_mindmap',
-    'review_mindmap': 'review_mindmap',
-}
-
 const availableStyles = [
     { label: '理论课 (theory_clean)', value: 'theory_clean' },
     { label: '实训课 (practice_steps)', value: 'practice_steps' },
     { label: '复习课 (review_mindmap)', value: 'review_mindmap' },
 ]
-
-function normalizeStyleName(input) {
-    if (!input) return null
-    const trimmed = input.trim()
-    if (styleNameMap[trimmed]) return styleNameMap[trimmed]
-    if (availableStyles.some(s => s.value === trimmed)) return trimmed
-    return trimmed
-}
 
 // 测试案例
 const testCases = [
