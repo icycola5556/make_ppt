@@ -35,8 +35,11 @@
       <!-- style_name输入（跳过3.2时） -->
       <div v-if="skipStyle" class="style-name-input">
         <label>Style Name:</label>
-        <input class="input" v-model="styleName" placeholder="理论课 / 实训课 / 复习课" />
-        <div class="hint">支持：theory_clean, practice_steps, review_mindmap</div>
+        <select class="input select" v-model="styleName">
+          <option value="theory_clean">理论课 (theory_clean)</option>
+          <option value="practice_steps">实训课 (practice_steps)</option>
+          <option value="review_mindmap">复习课 (review_mindmap)</option>
+        </select>
       </div>
       
       <div class="row">
@@ -115,7 +118,7 @@ const { busy, err, currentStep, needUserInput, questions, answers, teachingReque
 const testCaseList = testCases
 const rawText = ref('')
 const skipStyle = ref(false)
-const styleName = ref('')
+const styleName = ref('theory_clean')
 
 // slide_type 中文翻译
 const slideTypeLabels = {
