@@ -255,17 +255,50 @@ class TeachingRequest(BaseModel):
         return self.special_requirements.warnings.enabled
 
 
+class ColorConfig(BaseModel):
+    primary: str
+    secondary: str
+    accent: str
+    muted: str
+    text: str
+    background: str
+    warning: str
+    surface: Optional[str] = None
+    background_gradient: Optional[str] = None
+
+class FontConfig(BaseModel):
+    title_family: str
+    body_family: str
+    code_family: Optional[str] = None
+    title_size: int = 34
+    body_size: int = 22
+    line_height: float = 1.2
+
+class LayoutConfig(BaseModel):
+    density: Literal["compact", "comfortable"] = "comfortable"
+    notes_area: bool = True
+    alignment: Literal["left", "center"] = "left"
+    header_rule: bool = True
+    border_radius: str = "0px"
+    box_shadow: Literal["none", "soft", "hard"] = "none"
+
+class AnimationConfig(BaseModel):
+    transition: Literal["none", "slide", "fade", "zoom"] = "none"
+    element_entry: Literal["none", "fade-up", "typewriter"] = "none"
+
+class ImageryConfig(BaseModel):
+    image_style: str
+    icon_style: str
+    chart_preference: List[str] = Field(default_factory=list)
+
 class StyleConfig(BaseModel):
     """Module 3.2 output: standardized style config file."""
-
     style_name: str
-    color: Dict[str, str] = Field(
-        default_factory=dict,
-        description="primary/secondary/accent/background/text/warning etc.",
-    )
-    font: Dict[str, Any] = Field(default_factory=dict, description="title/body font families & sizes")
-    layout: Dict[str, Any] = Field(default_factory=dict, description="layout rules")
-    imagery: Dict[str, Any] = Field(default_factory=dict, description="image/icon/chart preference")
+    color: ColorConfig
+    font: FontConfig
+    layout: LayoutConfig
+    imagery: ImageryConfig
+    animation: AnimationConfig = Field(default_factory=AnimationConfig)
 
 
 class StyleSampleSlide(BaseModel):

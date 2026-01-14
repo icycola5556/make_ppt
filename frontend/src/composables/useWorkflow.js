@@ -16,6 +16,7 @@ const currentStep = ref('') // 当前执行步骤
 // 工作流结果
 const teachingRequest = ref(null)
 const styleConfig = ref(null)
+const styleSamples = ref([])
 const outline = ref(null)
 const deckContent = ref(null)
 const sessionState = ref(null)
@@ -76,6 +77,7 @@ export function useWorkflow() {
         Object.keys(answers).forEach(k => delete answers[k])
         teachingRequest.value = null
         styleConfig.value = null
+        styleSamples.value = []
         outline.value = null
         deckContent.value = null
         sessionState.value = null
@@ -124,6 +126,7 @@ export function useWorkflow() {
                 needUserInput.value = false
                 teachingRequest.value = res.teaching_request || null
                 styleConfig.value = res.style_config || null
+                styleSamples.value = res.style_samples || []
                 outline.value = res.outline || null
                 deckContent.value = res.deck_content || null
                 currentStep.value = '完成'
@@ -155,6 +158,7 @@ export function useWorkflow() {
         // 结果
         teachingRequest,
         styleConfig,
+        styleSamples,
         outline,
         deckContent,
         sessionState,
