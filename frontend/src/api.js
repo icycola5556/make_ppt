@@ -42,6 +42,7 @@ export const api = {
     })
   },
   getSession(session_id) { return http(`/api/session/${session_id}`) },
+  getSlideTypes() { return http('/api/slide-types') },
   logsUrl(session_id) { 
     const base = getApiBase().replace(/\/$/, '')
     return `${base}/api/logs/${session_id}`

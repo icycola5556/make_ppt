@@ -18,6 +18,7 @@ from ..modules.intent import (
 )
 from ..modules.style import choose_style, build_style_samples
 from ..modules.outline import generate_outline, generate_outline_with_llm
+from ..modules.outline.core import _refine_slide_types
 from ..modules.content import build_base_deck, refine_with_llm, validate_deck
 
 
@@ -468,9 +469,20 @@ class WorkflowEngine:
                 )
                 self.logger.emit(session_id, "3.3", "llm_optimization_response", meta)
                 optimized = PPTOutline.model_validate(parsed)
+                
+                # 后处理：使用LLM更准确地判断每页的slide_type
+                optimized = await _refine_slide_types(optimized, self.llm, self.logger, session_id)
+                
                 return optimized
             except Exception as e:
                 self._handle_workflow_error(session_id, "3.3", e, {"outline_available": True})
+        
+        # 即使LLM未启用优化，也尝试进行类型判断（如果LLM可用）
+        if self.llm.is_enabled():
+            try:
+                outline = await _refine_slide_types(outline, self.llm, self.logger, session_id)
+            except Exception as e:
+                self._handle_workflow_error(session_id, "3.3", e, {"type_refinement_failed": True})
 
         return outline
 

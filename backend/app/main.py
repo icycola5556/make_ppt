@@ -126,6 +126,13 @@ def get_logs(session_id: str):
     return logger.read_all(session_id)
 
 
+@app.get("/api/slide-types")
+def get_slide_types():
+    """获取所有可用的slide_type定义"""
+    from .modules.outline.core import get_slide_types as get_types
+    return get_types()
+
+
 # Serve frontend (pure static) for easy demo
 if os.path.isdir(FRONTEND_DIR):
     dist = Path(FRONTEND_DIST_DIR)

@@ -95,8 +95,11 @@
         <div class="slides-list">
           <div v-for="(slide, i) in outline.slides" :key="i" class="slide-item">
             <span class="slide-num">{{ i + 1 }}</span>
-            <span class="slide-type">{{ getSlideTypeLabel(slide.slide_type) }}</span>
-            <span class="slide-title">{{ slide.title }}</span>
+            <div class="slide-info">
+              <span class="slide-type">{{ getSlideTypeLabel(slide.slide_type) }}</span>
+              <span class="slide-title">{{ slide.title }}</span>
+              <span v-if="getSlideTypeDescription(slide.slide_type)" class="slide-desc">{{ getSlideTypeDescription(slide.slide_type) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -107,11 +110,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useWorkflow } from '../composables/useWorkflow'
 import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
+import { api } from '../api'
 
 const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, outline, reset, runWorkflow, availableStyles } = useWorkflow()
 
@@ -120,24 +124,38 @@ const rawText = ref('')
 const skipStyle = ref(false)
 const styleName = ref('theory_clean')
 
-// slide_type 中文翻译
-const slideTypeLabels = {
-  'cover': '封面',
-  'objectives': '教学目标',
-  'intro': '导入',
-  'concept': '概念讲解',
-  'bridge': '过渡衔接',
-  'relations': '案例分析',
-  'case': '案例展示',
-  'exercise': '练习题',
-  'summary': '总结',
-  'qa': '问答互动',
-  'ending': '结束页',
-  'reference': '参考资料'
-}
+// slide_type 数据（从API加载）
+const slideTypesData = ref(null)
+const slideTypeMap = computed(() => {
+  if (!slideTypesData.value) return {}
+  const map = {}
+  for (const st of slideTypesData.value.slide_types || []) {
+    map[st.slide_type] = {
+      name: st.name,
+      description: st.description,
+      instruction: st.instruction
+    }
+  }
+  return map
+})
+
+// 加载slide_type数据
+onMounted(async () => {
+  try {
+    slideTypesData.value = await api.getSlideTypes()
+  } catch (e) {
+    console.error('Failed to load slide types:', e)
+    // 降级到硬编码的映射
+    slideTypesData.value = { slide_types: [] }
+  }
+})
 
 function getSlideTypeLabel(type) {
-  return slideTypeLabels[type] || type
+  return slideTypeMap.value[type]?.name || type
+}
+
+function getSlideTypeDescription(type) {
+  return slideTypeMap.value[type]?.description || ''
 }
 
 async function runOutline() {
@@ -207,10 +225,12 @@ async function submitAnswers(useDefaults) {
 .outline-title { font-size: 18px; font-weight: 700; color: #1e293b; }
 .slide-count { color: #6b7280; font-size: 13px; margin: 6px 0 12px; }
 .slides-list { max-height: 300px; overflow-y: auto; }
-.slide-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
-.slide-num { background: #7c3aed; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
-.slide-type { color: #6b7280; font-size: 12px; min-width: 80px; }
-.slide-title { font-weight: 500; }
+.slide-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+.slide-num { background: #7c3aed; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.slide-info { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.slide-type { color: #7c3aed; font-size: 12px; font-weight: 600; }
+.slide-title { font-weight: 500; color: #1e293b; }
+.slide-desc { color: #6b7280; font-size: 11px; line-height: 1.4; }
 .test-cases { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
 .test-btn { padding: 6px 12px; border: 1px dashed #9ca3af; border-radius: 6px; background: #f9fafb; cursor: pointer; font-size: 12px; }
 .test-btn:hover { border-color: #7c3aed; background: #f5f3ff; color: #7c3aed; }
