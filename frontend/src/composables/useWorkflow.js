@@ -159,7 +159,6 @@ export function useWorkflow() {
         reset,
         createSession,
         runWorkflow,
-        normalizeStyleName,
         setApiBase,
         logsHref,
     }
