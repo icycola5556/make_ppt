@@ -138,6 +138,7 @@ def check_slide_count_conflict(req: TeachingRequest) -> bool:
     return req.slide_requirements.target_count < req.slide_requirements.min_count
 
 
+
 # ============================================================================
 # LLM推荐页数功能
 # ============================================================================
@@ -334,6 +335,15 @@ def update_page_distribution(req: TeachingRequest) -> None:
         summary=1
     )
     req.estimated_page_distribution = dist
+
+    # 确保 min_count 已设置（如果 LLM 未返回）
+    if req.slide_requirements.min_count is None:
+        req.slide_requirements.min_count = calculate_min_slides(
+            req.knowledge_points, 
+            req.special_requirements.exercises.enabled, 
+            req.subject_info.subject_category
+        )
+        req.slide_requirements.max_count = req.slide_requirements.min_count + 2
 
 
 def generate_display_summary(req: TeachingRequest) -> str:
