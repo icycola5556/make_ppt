@@ -168,8 +168,7 @@ async function submitAnswers(useDefaults) {
       stop_at: '3.3'
     }
     if (skipStyle.value) {
-      const normalized = normalizeStyleName(styleName.value)
-      if (normalized) opts.style_name = normalized
+      if (styleName.value) opts.style_name = styleName.value
     }
     await runWorkflow(opts)
   } catch (e) {
