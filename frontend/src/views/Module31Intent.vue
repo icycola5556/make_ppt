@@ -29,6 +29,7 @@
         </button>
         <button class="btn" @click="reset" :disabled="busy">重置</button>
       </div>
+      <div v-if="busy && currentStep" class="progress">⏳ {{ currentStep }}</div>
       <div v-if="err" class="err">❌ {{ err }}</div>
     </section>
 
@@ -71,7 +72,7 @@ import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
 const {
-  busy, err, needUserInput, questions, answers,
+  busy, err, currentStep, needUserInput, questions, answers,
   teachingRequest, reset, runWorkflow
 } = useWorkflow()
 

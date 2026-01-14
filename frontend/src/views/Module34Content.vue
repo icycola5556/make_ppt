@@ -26,12 +26,32 @@
         </button>
         <button class="btn" @click="reset" :disabled="busy">重置</button>
       </div>
-      <div v-if="busy" class="loading">⏳ 正在生成内容，请稍候...</div>
+      <div v-if="busy && currentStep" class="progress">⏳ {{ currentStep }}</div>
       <div v-if="err" class="err">❌ {{ err }}</div>
     </section>
 
+    <!-- 问答交互（意图确认阶段） -->
+    <section v-if="needUserInput" class="card warn">
+      <div class="h3">请确认或补充信息</div>
+      <div class="qbox" v-for="q in questions" :key="q.key">
+        <div class="qtitle">{{ q.question }}</div>
+        <div v-if="q.options && q.options.length" class="options-group">
+          <button 
+            v-for="opt in q.options" :key="opt"
+            class="option-btn" :class="{ active: answers[q.key] === opt }"
+            @click="answers[q.key] = opt"
+          >{{ opt }}</button>
+        </div>
+        <input v-else class="input" v-model="answers[q.key]" :placeholder="q.placeholder || '请输入...'" />
+      </div>
+      <div class="row">
+        <button class="primary" @click="submitAnswers(false)" :disabled="busy">提交并继续</button>
+        <button class="btn" @click="submitAnswers(true)" :disabled="busy">使用默认值</button>
+      </div>
+    </section>
+
     <!-- 折叠的前置结果 -->
-    <section v-if="teachingRequest" class="card">
+    <section v-if="teachingRequest && !needUserInput" class="card">
       <div class="h3">3.1 意图理解结果</div>
       <JsonBlock title="teaching_request.json" :value="teachingRequest" collapsed />
     </section>
@@ -80,7 +100,7 @@ import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
-const { busy, err, teachingRequest, styleConfig, outline, deckContent, reset, runWorkflow } = useWorkflow()
+const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, outline, deckContent, reset, runWorkflow } = useWorkflow()
 
 const testCaseList = testCases
 const rawText = ref('')
@@ -88,6 +108,19 @@ const rawText = ref('')
 async function runContent() {
   try {
     await runWorkflow({ user_text: rawText.value, stop_at: '3.4' })
+  } catch (e) {
+    err.value = e.message
+  }
+}
+
+async function submitAnswers(useDefaults) {
+  try {
+    await runWorkflow({
+      user_text: rawText.value,
+      answers: useDefaults ? {} : answers,
+      auto_fill_defaults: useDefaults,
+      stop_at: '3.4'
+    })
   } catch (e) {
     err.value = e.message
   }
@@ -101,6 +134,7 @@ async function runContent() {
 .desc { color: #6b7280; margin-bottom: 16px; }
 .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; background: #fff; margin-bottom: 16px; }
 .card.highlight { border-color: #dc2626; border-width: 2px; }
+.card.warn { border-color: #f59e0b55; background: #fffbeb; }
 .h3 { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 .textarea { width: 100%; min-height: 80px; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px; font-size: 14px; }
 .row { display: flex; gap: 10px; margin-top: 12px; }
@@ -121,5 +155,13 @@ async function runContent() {
 .test-btn { padding: 6px 12px; border: 1px dashed #9ca3af; border-radius: 6px; background: #f9fafb; cursor: pointer; font-size: 12px; }
 .test-btn:hover { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
 .label { font-weight: 600; font-size: 13px; }
+.qbox { margin: 12px 0; padding: 12px; border: 1px dashed #d1d5db; border-radius: 10px; background: #fff; }
+.qtitle { font-weight: 600; margin-bottom: 8px; }
+.options-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.option-btn { padding: 8px 14px; border: 2px solid #d1d5db; border-radius: 8px; background: #fff; cursor: pointer; }
+.option-btn.active { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
+.input { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 10px; }
+.progress { margin-top: 12px; color: #dc2626; font-weight: 600; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 .err { margin-top: 10px; color: #b91c1c; font-weight: 600; }
 </style>
