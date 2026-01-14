@@ -13,6 +13,13 @@
       <div class="h3">输入需求（完整流程 3.1→3.2→3.3→3.4）</div>
       <textarea class="textarea" v-model="rawText" placeholder="例如：给我一个机械专业「液压传动原理」的理论课课件，10页左右"></textarea>
       
+      <div class="test-cases">
+        <span class="label">测试案例：</span>
+        <button class="test-btn" v-for="tc in testCaseList" :key="tc.label" @click="rawText = tc.text">
+          {{ tc.label }}
+        </button>
+      </div>
+      
       <div class="row">
         <button class="primary" @click="runContent" :disabled="busy || !rawText.trim()">
           运行内容生成
@@ -69,11 +76,13 @@
 <script setup>
 import { ref } from 'vue'
 import { useWorkflow } from '../composables/useWorkflow'
+import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
 const { busy, err, teachingRequest, styleConfig, outline, deckContent, reset, runWorkflow } = useWorkflow()
 
+const testCaseList = testCases
 const rawText = ref('')
 
 async function runContent() {
@@ -108,5 +117,9 @@ async function runContent() {
 .page-num { background: #dc2626; color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
 .page-title { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .page-elements { font-size: 12px; color: #6b7280; }
+.test-cases { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+.test-btn { padding: 6px 12px; border: 1px dashed #9ca3af; border-radius: 6px; background: #f9fafb; cursor: pointer; font-size: 12px; }
+.test-btn:hover { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
+.label { font-weight: 600; font-size: 13px; }
 .err { margin-top: 10px; color: #b91c1c; font-weight: 600; }
 </style>

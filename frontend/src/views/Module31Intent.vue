@@ -18,8 +18,8 @@
       
       <div class="test-cases">
         <span class="label">测试案例：</span>
-        <button class="test-btn" v-for="(tc, i) in testCases" :key="i" @click="rawText = tc">
-          {{ ['完整输入', '缺少知识点', '页数冲突'][i] }}
+        <button class="test-btn" v-for="tc in testCaseList" :key="tc.label" @click="rawText = tc.text">
+          {{ tc.label }}
         </button>
       </div>
 
@@ -66,14 +66,16 @@
 <script setup>
 import { ref } from 'vue'
 import { useWorkflow } from '../composables/useWorkflow'
+import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
 const {
   busy, err, needUserInput, questions, answers,
-  teachingRequest, testCases, reset, runWorkflow
+  teachingRequest, reset, runWorkflow
 } = useWorkflow()
 
+const testCaseList = testCases
 const rawText = ref('')
 
 async function runIntent() {

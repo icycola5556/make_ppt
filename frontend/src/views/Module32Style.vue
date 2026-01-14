@@ -13,6 +13,13 @@
       <div class="h3">输入需求（将先执行3.1再执行3.2）</div>
       <textarea class="textarea" v-model="rawText" placeholder="例如：给我一个机械专业「液压传动原理」的理论课课件"></textarea>
       
+      <div class="test-cases">
+        <span class="label">测试案例：</span>
+        <button class="test-btn" v-for="tc in testCaseList" :key="tc.label" @click="rawText = tc.text">
+          {{ tc.label }}
+        </button>
+      </div>
+      
       <div class="row">
         <button class="primary" @click="runStyle" :disabled="busy || !rawText.trim()">
           运行风格设计
@@ -50,11 +57,13 @@
 <script setup>
 import { ref } from 'vue'
 import { useWorkflow } from '../composables/useWorkflow'
+import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
 const { busy, err, teachingRequest, styleConfig, reset, runWorkflow } = useWorkflow()
 
+const testCaseList = testCases
 const rawText = ref('')
 
 async function runStyle() {
@@ -84,5 +93,9 @@ async function runStyle() {
 .color-item { width: 100px; height: 60px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); font-size: 11px; }
 .color-label { font-weight: 700; }
 .color-value { opacity: 0.8; }
+.test-cases { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+.test-btn { padding: 6px 12px; border: 1px dashed #9ca3af; border-radius: 6px; background: #f9fafb; cursor: pointer; font-size: 12px; }
+.test-btn:hover { border-color: #059669; background: #ecfdf5; color: #059669; }
+.label { font-weight: 600; font-size: 13px; }
 .err { margin-top: 10px; color: #b91c1c; font-weight: 600; }
 </style>

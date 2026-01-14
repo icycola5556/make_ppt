@@ -13,6 +13,13 @@
       <div class="h3">输入需求</div>
       <textarea class="textarea" v-model="rawText" placeholder="例如：给我一个机械专业「液压传动原理」的理论课课件，10页左右"></textarea>
       
+      <div class="test-cases">
+        <span class="label">测试案例：</span>
+        <button class="test-btn" v-for="tc in testCaseList" :key="tc.label" @click="rawText = tc.text">
+          {{ tc.label }}
+        </button>
+      </div>
+      
       <!-- 模式选择 -->
       <div class="mode-select">
         <label class="mode-option">
@@ -78,11 +85,13 @@
 <script setup>
 import { ref } from 'vue'
 import { useWorkflow } from '../composables/useWorkflow'
+import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
 const { busy, err, teachingRequest, styleConfig, outline, reset, runWorkflow, normalizeStyleName } = useWorkflow()
 
+const testCaseList = testCases
 const rawText = ref('')
 const skipStyle = ref(false)
 const styleName = ref('')
@@ -155,5 +164,9 @@ async function runOutline() {
 .slide-num { background: #7c3aed; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
 .slide-type { color: #6b7280; font-size: 12px; min-width: 80px; }
 .slide-title { font-weight: 500; }
+.test-cases { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+.test-btn { padding: 6px 12px; border: 1px dashed #9ca3af; border-radius: 6px; background: #f9fafb; cursor: pointer; font-size: 12px; }
+.test-btn:hover { border-color: #7c3aed; background: #f5f3ff; color: #7c3aed; }
+.label { font-weight: 600; font-size: 13px; }
 .err { margin-top: 10px; color: #b91c1c; font-weight: 600; }
 </style>
