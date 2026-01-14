@@ -45,13 +45,25 @@ pptgen_workflow/
 │   │   │   └── export/             # 3.7 PPTX导出
 │   │   │
 │   │   └── orchestrator/           # 工作流编排
-│   │       ├── engine.py           # WorkflowEngine
-│   │       └── prompts.py          # Prompt 模板
+│   │       └── engine.py           # WorkflowEngine
 │   │
+│   ├── scripts/                    # 工具脚本
+│   ├── tests/                      # 测试代码
 │   ├── data/                       # 会话数据/日志
 │   └── requirements.txt
 │
-├── frontend/                       # Vue 3 + Vite 前端
+├── frontend/                       # Vue 3 + Vite
+│   └── src/
+│       ├── App.vue                 # Tab导航主容器
+│       ├── views/                  # 模块页面
+│       │   ├── Module31Intent.vue  # 3.1 意图理解
+│       │   ├── Module32Style.vue   # 3.2 风格设计
+│       │   ├── Module33Outline.vue # 3.3 大纲生成
+│       │   └── Module34Content.vue # 3.4 内容生成
+│       ├── composables/            # 共享逻辑
+│       │   └── useWorkflow.js      # 工作流状态管理
+│       └── components/common/      # 公共组件
+│
 ├── docs/                           # 技术文档
 └── README.md
 ```
