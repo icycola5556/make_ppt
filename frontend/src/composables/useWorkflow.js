@@ -99,7 +99,16 @@ export function useWorkflow() {
             }
 
             // 根据stop_at确定要执行的步骤
-            currentStep.value = '3.1 意图理解中...'
+            const isResuming = Object.keys(ans).length > 0 || auto_fill_defaults
+            if (isResuming) {
+                if (stop_at === '3.1') currentStep.value = '3.1 意图理解中...'
+                else if (stop_at === '3.2') currentStep.value = '3.2 风格设计中...'
+                else if (stop_at === '3.3') currentStep.value = '3.3 大纲生成中...'
+                else if (stop_at === '3.4') currentStep.value = '3.4 内容生成中...'
+                else currentStep.value = '正在执行...'
+            } else {
+                currentStep.value = '3.1 意图理解中...'
+            }
 
             const res = await api.runWorkflow(sessionId.value, user_text, ans, auto_fill_defaults, stop_at, style_name)
 
