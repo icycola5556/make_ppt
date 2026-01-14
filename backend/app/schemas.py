@@ -61,6 +61,8 @@ class SlideRequirementsDetail(BaseModel):
     max_count: Optional[int] = None
     flexibility: Literal["fixed", "adjustable"] = "adjustable"
     lesson_duration_min: int = 45
+    llm_recommended_count: Optional[int] = None  # LLM推荐的页数
+    page_conflict_resolution: Optional[str] = None  # 用户选择的解决方式: "accept_recommended", "custom", "keep_original"
 
 class CaseRequirement(BaseModel):
     enabled: bool = True
@@ -335,6 +337,9 @@ class Question(BaseModel):
     options: Optional[List[str]] = None
     placeholder: Optional[str] = None
     required: bool = True
+    # 页面冲突相关字段
+    recommended_count: Optional[int] = None  # LLM推荐的页数
+    explanation: Optional[str] = None  # 推荐理由说明
 
 
 class WorkflowRunRequest(BaseModel):
@@ -346,6 +351,9 @@ class WorkflowRunRequest(BaseModel):
     auto_fill_defaults: bool = False
     # NEW: Stop at specific module for testing
     stop_at: Optional[Literal["3.1", "3.2", "3.3", "3.4"]] = None
+    # NEW: For test mode 3.1->3.3: allow user to specify style_name directly
+    # Valid values: "theory_clean", "practice_steps", "review_mindmap"
+    style_name: Optional[str] = None
 
 
 class WorkflowRunResponse(BaseModel):

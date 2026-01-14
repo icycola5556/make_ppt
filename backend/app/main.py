@@ -72,6 +72,7 @@ async def run_workflow(req: WorkflowRunRequest):
             answers=req.answers or {},
             auto_fill_defaults_flag=req.auto_fill_defaults,
             stop_at=req.stop_at,
+            style_name=req.style_name,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

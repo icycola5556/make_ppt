@@ -4,10 +4,14 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .intent import apply_user_answers, autofill_defaults, heuristic_parse, validate_and_build_questions, detect_professional_category, calculate_min_slides, generate_display_summary, update_page_distribution
+from .intent import (
+    apply_user_answers, autofill_defaults, heuristic_parse, validate_and_build_questions,
+    detect_professional_category, calculate_min_slides, generate_display_summary, update_page_distribution,
+    check_slide_count_conflict, recommend_slide_count_with_llm
+)
 from .llm import LLMClient
 from .logger import WorkflowLogger
-from .outline import generate_outline
+from .outline import generate_outline, generate_outline_with_llm
 from .schemas import PPTOutline, SessionState, SlideDeckContent, StyleConfig, StyleSampleSlide, TeachingRequest
 from .style import build_style_samples, choose_style
 from .content import build_base_deck, refine_with_llm, validate_deck
@@ -400,17 +404,66 @@ class WorkflowEngine:
 
         return cfg, samples
 
-    async def _generate_outline(self, session_id: str, req: TeachingRequest, style: StyleConfig) -> PPTOutline:
-        outline = generate_outline(req, style_name=style.style_name)
+    async def _generate_outline(self, session_id: str, req: TeachingRequest, style_config: Optional[StyleConfig] = None, style_name: Optional[str] = None) -> PPTOutline:
+        """生成PPT大纲（3.3模块）
+        
+        优先使用LLM进行智能规划，如果LLM未启用或调用失败，则降级到确定性生成。
+        
+        Args:
+            style_config: 可选的StyleConfig对象（正常流程）
+            style_name: 可选的style_name字符串（测试模式3.1->3.3）
+                       如果都未提供，则从teaching_scene推断
+        """
+        # 确定style_name：优先使用参数，其次从style_config获取，最后从teaching_scene推断
+        if style_name:
+            final_style_name = style_name
+        elif style_config:
+            final_style_name = style_config.style_name
+        else:
+            # 从teaching_scene推断（与choose_style逻辑一致）
+            if req.teaching_scene == "practice":
+                final_style_name = "practice_steps"
+            elif req.teaching_scene == "review":
+                final_style_name = "review_mindmap"
+            else:
+                final_style_name = "theory_clean"
+        
+        # 优先使用LLM智能规划
+        if self.llm.is_enabled():
+            try:
+                outline = await generate_outline_with_llm(
+                    req=req,
+                    style_name=final_style_name,
+                    llm=self.llm,
+                    logger=self.logger,
+                    session_id=session_id,
+                )
+                self.logger.emit(session_id, "3.3", "outline_final", outline.model_dump(mode="json"))
+                return outline
+            except Exception as e:
+                # LLM调用失败，降级到确定性生成
+                self._handle_workflow_error(session_id, "3.3", e, {"fallback_to_deterministic": True})
+        
+        # 确定性生成（Fallback）
+        outline = generate_outline(req, style_name=final_style_name)
         self.logger.emit(session_id, "3.3", "outline_base", outline.model_dump(mode="json"))
-
+        
+        # 如果LLM启用，尝试对确定性生成的结果进行优化
         if self.llm.is_enabled():
             try:
                 schema_hint = outline.model_json_schema()
                 user_msg = json.dumps(outline.model_dump(mode="json"), ensure_ascii=False)
-                self.logger.emit(session_id, "3.3", "llm_prompt", {"system": OUTLINE_SYSTEM_PROMPT, "user": user_msg, "schema_hint": schema_hint})
-                parsed, meta = await self.llm.chat_json(OUTLINE_SYSTEM_PROMPT, user_msg, json.dumps(schema_hint, ensure_ascii=False))
-                self.logger.emit(session_id, "3.3", "llm_response", meta)
+                self.logger.emit(session_id, "3.3", "llm_optimization_prompt", {
+                    "system": OUTLINE_SYSTEM_PROMPT,
+                    "user": user_msg,
+                    "schema_hint": schema_hint
+                })
+                parsed, meta = await self.llm.chat_json(
+                    OUTLINE_SYSTEM_PROMPT,
+                    user_msg,
+                    json.dumps(schema_hint, ensure_ascii=False)
+                )
+                self.logger.emit(session_id, "3.3", "llm_optimization_response", meta)
                 optimized = PPTOutline.model_validate(parsed)
                 return optimized
             except Exception as e:
@@ -769,12 +822,14 @@ class WorkflowEngine:
             # 后续阶段失败时的降级处理
             error_info["fallback_strategy"] = "use_base_implementation"
 
-    async def run(self, session_id: str, user_text: Optional[str], answers: Optional[Dict[str, Any]], auto_fill_defaults_flag: bool, stop_at: Optional[str] = None,
+    async def run(self, session_id: str, user_text: Optional[str], answers: Optional[Dict[str, Any]], auto_fill_defaults_flag: bool, stop_at: Optional[str] = None, style_name: Optional[str] = None,
                  intent_params: Optional[Dict[str, Any]] = None) -> Tuple[SessionState, str, List[Any]]:
         """Run the workflow until it either completes or needs user input.
 
         Args:
             stop_at: If set to "3.1", "3.2", "3.3", or "3.4", stop after that module.
+            style_name: For test mode 3.1->3.3, allow user to specify style_name directly.
+                       Valid values: "theory_clean", "practice_steps", "review_mindmap"
 
         Returns: (state, status, questions)
           status: "ok" | "need_user_input"
@@ -820,9 +875,49 @@ class WorkflowEngine:
             state.teaching_request.display_summary = generate_display_summary(state.teaching_request)
             self.store.save(state)
 
+        # 在confirm_goals阶段，先检查页面冲突并调用LLM推荐（如果有冲突且LLM可用）
+        # 这必须在validate_and_build_questions之前执行，确保LLM推荐结果可用
+        if (state.teaching_request.interaction_stage == "confirm_goals" and 
+            check_slide_count_conflict(state.teaching_request) and 
+            self.llm.is_enabled()):
+            # 如果还没有推荐结果，调用LLM推荐
+            if state.teaching_request.slide_requirements.llm_recommended_count is None:
+                try:
+                    recommended_count, explanation = await recommend_slide_count_with_llm(
+                        state.teaching_request,
+                        self.llm,
+                        self.logger,
+                        session_id,
+                    )
+                    if recommended_count:
+                        state.teaching_request.slide_requirements.llm_recommended_count = recommended_count
+                        # 将解释存储在interaction_metadata中
+                        state.teaching_request.interaction_metadata["_llm_recommendation_explanation"] = explanation
+                        # 也存储到临时属性中，供validate_and_build_questions使用
+                        setattr(state.teaching_request, '_llm_recommendation_explanation', explanation)
+                        self.logger.emit(session_id, "3.1", "llm_recommendation_stored", {
+                            "recommended_count": recommended_count,
+                            "explanation": explanation,
+                        })
+                        # 保存状态
+                        self.store.save(state)
+                except Exception as e:
+                    self.logger.emit(session_id, "3.1", "llm_recommendation_error", {
+                        "error": str(e),
+                    })
+                    # 推荐失败不影响流程，继续使用最小页数
 
         # Validate and get questions based on interaction_stage
         questions, missing = validate_and_build_questions(state.teaching_request)
+        
+        # 如果有推荐解释，将其添加到相关问题的explanation字段
+        if state.teaching_request.interaction_metadata.get("_llm_recommendation_explanation"):
+            explanation = state.teaching_request.interaction_metadata["_llm_recommendation_explanation"]
+            for q in questions:
+                if q.key == "slide_count_adjust":
+                    q.explanation = explanation
+                    # 确保临时属性也存在
+                    setattr(state.teaching_request, '_llm_recommendation_explanation', explanation)
 
         # If there are questions to ask, return for user input
         if questions:
@@ -868,7 +963,10 @@ class WorkflowEngine:
             return state, "ok", []
 
         # --- Stage 3.2 ---
-        if state.style_config is None:
+        # Skip 3.2 if style_name is provided (test mode: 3.1->3.3)
+        skip_3_2 = style_name is not None
+        
+        if not skip_3_2 and state.style_config is None:
             cfg, samples = await self._design_style(session_id, state.teaching_request)
             state.style_config = cfg
             state.style_samples = samples
@@ -881,7 +979,12 @@ class WorkflowEngine:
 
         # --- Stage 3.3 ---
         if state.outline is None:
-            outline = await self._generate_outline(session_id, state.teaching_request, state.style_config)
+            # If style_name is provided, use it directly; otherwise use style_config
+            if skip_3_2:
+                # For test mode 3.1->3.3, create a minimal StyleConfig or pass style_name directly
+                outline = await self._generate_outline(session_id, state.teaching_request, style_name=style_name)
+            else:
+                outline = await self._generate_outline(session_id, state.teaching_request, style_config=state.style_config)
             state.outline = outline
             state.stage = "3.3"
             self.store.save(state)
