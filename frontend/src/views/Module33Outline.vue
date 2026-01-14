@@ -36,9 +36,9 @@
       <div v-if="skipStyle" class="style-name-input">
         <label>Style Name:</label>
         <select class="input select" v-model="styleName">
-          <option value="theory_clean">理论课 (theory_clean)</option>
-          <option value="practice_steps">实训课 (practice_steps)</option>
-          <option value="review_mindmap">复习课 (review_mindmap)</option>
+          <option v-for="s in availableStyles" :key="s.value" :value="s.value">
+            {{ s.label }}
+          </option>
         </select>
       </div>
       
@@ -113,7 +113,7 @@ import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
-const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, outline, reset, runWorkflow, normalizeStyleName } = useWorkflow()
+const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, outline, reset, runWorkflow, normalizeStyleName, availableStyles } = useWorkflow()
 
 const testCaseList = testCases
 const rawText = ref('')

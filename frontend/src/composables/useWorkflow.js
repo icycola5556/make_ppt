@@ -52,11 +52,17 @@ const styleNameMap = {
     'review_mindmap': 'review_mindmap',
 }
 
+const availableStyles = [
+    { label: '理论课 (theory_clean)', value: 'theory_clean' },
+    { label: '实训课 (practice_steps)', value: 'practice_steps' },
+    { label: '复习课 (review_mindmap)', value: 'review_mindmap' },
+]
+
 function normalizeStyleName(input) {
     if (!input) return null
     const trimmed = input.trim()
     if (styleNameMap[trimmed]) return styleNameMap[trimmed]
-    if (['theory_clean', 'practice_steps', 'review_mindmap'].includes(trimmed)) return trimmed
+    if (availableStyles.some(s => s.value === trimmed)) return trimmed
     return trimmed
 }
 
@@ -168,6 +174,7 @@ export function useWorkflow() {
         testModes,
         testModeDescriptions,
         testCases,
+        availableStyles, // 样式选项
         // 方法
         checkHealth,
         reset,
