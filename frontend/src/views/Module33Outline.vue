@@ -59,12 +59,12 @@
       
       <!-- 大纲预览 -->
       <div class="outline-preview">
-        <div class="outline-title">{{ outline.title || '未命名大纲' }}</div>
+        <div class="outline-title">{{ outline.deck_title || outline.title || '未命名大纲' }}</div>
         <div class="slide-count">共 {{ outline.slides?.length || 0 }} 页</div>
         <div class="slides-list">
           <div v-for="(slide, i) in outline.slides" :key="i" class="slide-item">
             <span class="slide-num">{{ i + 1 }}</span>
-            <span class="slide-type">[{{ slide.slide_type }}]</span>
+            <span class="slide-type">{{ getSlideTypeLabel(slide.slide_type) }}</span>
             <span class="slide-title">{{ slide.title }}</span>
           </div>
         </div>
@@ -86,6 +86,26 @@ const { busy, err, teachingRequest, styleConfig, outline, reset, runWorkflow, no
 const rawText = ref('')
 const skipStyle = ref(false)
 const styleName = ref('')
+
+// slide_type 中文翻译
+const slideTypeLabels = {
+  'cover': '封面',
+  'objectives': '教学目标',
+  'intro': '导入',
+  'concept': '概念讲解',
+  'bridge': '过渡衔接',
+  'relations': '案例分析',
+  'case': '案例展示',
+  'exercise': '练习题',
+  'summary': '总结',
+  'qa': '问答互动',
+  'ending': '结束页',
+  'reference': '参考资料'
+}
+
+function getSlideTypeLabel(type) {
+  return slideTypeLabels[type] || type
+}
 
 async function runOutline() {
   try {
