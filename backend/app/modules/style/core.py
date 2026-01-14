@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-from .schemas import StyleConfig, StyleSampleSlide, TeachingRequest
+from ...common.schemas import StyleConfig, StyleSampleSlide, TeachingRequest
 
 
 STYLE_TEMPLATES = {

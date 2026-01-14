@@ -1,9 +1,8 @@
 # modules/intent - 3.1 意图理解模块
 # 负责用户输入解析、需求校验、交互问答
 
-# 暂时从原始位置导入以保持兼容性
-from ...intent import (
-    # 解析函数
+from .parser import (
+    # 核心解析
     heuristic_parse,
     validate_and_build_questions,
     apply_user_answers,

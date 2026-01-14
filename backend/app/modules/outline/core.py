@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from .schemas import OutlineSlide, PPTOutline, TeachingRequest
+from ...common.schemas import OutlineSlide, PPTOutline, TeachingRequest
 
 
 def _deck_title(req: TeachingRequest) -> str:

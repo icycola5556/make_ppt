@@ -5,14 +5,14 @@ import math
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .schemas import (
+from ...common.schemas import (
     ProfessionalCategory, Question, TeachingRequest,
     SubjectInfo, KnowledgePointDetail, KnowledgeStructure, TeachingScenarioDetail,
     TeachingObjectivesStructured, SlideRequirementsDetail, CaseRequirement,
     ExerciseRequirement, InteractionRequirement, WarningRequirement,
     SpecialRequirementsDetailed, PageDistribution, ParsingMetadata
 )
-from .standards import default_goals
+from ...common.standards import default_goals
 
 
 def _assess_kp_difficulty(kp_name: str, user_text: str) -> str:
