@@ -10,11 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from .llm import LLMClient
-from .logger import WorkflowLogger
-from .schemas import WorkflowRunRequest, WorkflowRunResponse
-from .store import SessionStore
-from .workflow import WorkflowEngine
+# 使用新的模块化导入
+from .common import LLMClient, WorkflowLogger, SessionStore, WorkflowRunRequest, WorkflowRunResponse
+from .orchestrator import WorkflowEngine
 
 load_dotenv()
 

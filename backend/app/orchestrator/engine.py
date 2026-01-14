@@ -4,18 +4,21 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .intent import (
-    apply_user_answers, autofill_defaults, heuristic_parse, validate_and_build_questions,
-    detect_professional_category, calculate_min_slides, generate_display_summary, update_page_distribution,
-    check_slide_count_conflict, recommend_slide_count_with_llm
+# 使用新的模块化导入
+from ..common import (
+    LLMClient, WorkflowLogger, ToolExecutor,
+    TeachingRequest, StyleConfig, StyleSampleSlide,
+    PPTOutline, SlideDeckContent, SessionState,
 )
-from .llm import LLMClient
-from .logger import WorkflowLogger
-from .outline import generate_outline, generate_outline_with_llm
-from .schemas import PPTOutline, SessionState, SlideDeckContent, StyleConfig, StyleSampleSlide, TeachingRequest
-from .style import build_style_samples, choose_style
-from .content import build_base_deck, refine_with_llm, validate_deck
-from .tools import ToolExecutor
+from ..modules.intent import (
+    heuristic_parse, validate_and_build_questions, apply_user_answers,
+    autofill_defaults, detect_professional_category, calculate_min_slides,
+    generate_display_summary, update_page_distribution, check_slide_count_conflict,
+    recommend_slide_count_with_llm,
+)
+from ..modules.style import choose_style, build_style_samples
+from ..modules.outline import generate_outline, generate_outline_with_llm
+from ..modules.content import build_base_deck, refine_with_llm, validate_deck
 
 
 # Enhanced system prompt with Few-Shot examples and tool usage guidance
@@ -790,7 +793,7 @@ class WorkflowEngine:
 
             # 应用最终优化结果
             if parsed and "optimized_request" in parsed:
-                from .schemas import TeachingRequest
+                from ..common.schemas import TeachingRequest
                 optimized_request = TeachingRequest.model_validate(parsed["optimized_request"])
                 # 保持原有的元数据
                 optimized_request.parsing_metadata = current_request.parsing_metadata

@@ -4,9 +4,9 @@ import json
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
-from .llm import LLMClient
-from .logger import WorkflowLogger
-from .schemas import PPTOutline, SlideDeckContent, SlideElement, SlidePage, StyleConfig, TeachingRequest
+from ...common.llm_client import LLMClient
+from ...common.logger import WorkflowLogger
+from ...common.schemas import PPTOutline, SlideDeckContent, SlideElement, SlidePage, StyleConfig, TeachingRequest
 
 
 CONTENT_SYSTEM_PROMPT = """你是高职教学课件内容生成助手，致力于创建高质量的教学演示内容。
