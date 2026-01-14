@@ -15,6 +15,9 @@ from ..schemas import (
     SlidePage,
     SlideElement,
     Question,
+    WorkflowRunRequest,
+    WorkflowRunResponse,
+    SessionState,
 )
 from ..llm import LLMClient
 from ..logger import WorkflowLogger
@@ -32,6 +35,9 @@ __all__ = [
     "SlidePage",
     "SlideElement",
     "Question",
+    "WorkflowRunRequest",
+    "WorkflowRunResponse",
+    "SessionState",
     # 基础设施
     "LLMClient",
     "WorkflowLogger",
