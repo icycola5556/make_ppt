@@ -1,10 +1,42 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ...common.schemas import OutlineSlide, PPTOutline, TeachingRequest
 from ...prompts.outline import OUTLINE_PLANNING_SYSTEM_PROMPT
+
+# 加载slide_type定义
+_SLIDE_TYPE_JSON_PATH = Path(__file__).parent / "slide_type.json"
+_SLIDE_TYPES_DATA = None
+
+def _load_slide_types() -> Dict[str, Any]:
+    """加载slide_type.json数据"""
+    global _SLIDE_TYPES_DATA
+    if _SLIDE_TYPES_DATA is None:
+        if _SLIDE_TYPE_JSON_PATH.exists():
+            with open(_SLIDE_TYPE_JSON_PATH, 'r', encoding='utf-8') as f:
+                _SLIDE_TYPES_DATA = json.load(f)
+        else:
+            _SLIDE_TYPES_DATA = {"slide_types": []}
+    return _SLIDE_TYPES_DATA
+
+def _get_slide_type_definitions() -> str:
+    """获取slide_type定义的文本描述，用于LLM prompt"""
+    data = _load_slide_types()
+    definitions = []
+    for st in data.get("slide_types", []):
+        definitions.append(
+            f"- **{st['slide_type']}**: {st['name']} - {st['description']}\n"
+            f"  使用场景：{st['instruction']}"
+        )
+    return "\n".join(definitions)
+
+def get_slide_types() -> Dict[str, Any]:
+    """获取slide_type数据（供API使用）"""
+    return _load_slide_types()
 
 
 def _deck_title(req: TeachingRequest) -> str:
@@ -17,6 +49,82 @@ def _deck_title(req: TeachingRequest) -> str:
     return "知识点课件"
 
 
+
+def _build_outline_planning_prompt() -> str:
+    """构建大纲规划系统提示词，动态包含slide_type定义"""
+    slide_type_defs = _get_slide_type_definitions()
+    
+    return f"""你是高职课程PPT大纲智能规划专家，负责根据教学需求生成结构化的课件大纲。
+
+## 核心职责
+1. **智能页面规划**：根据知识点数量、难度、教学场景，合理分配页面数量和类型
+2. **教学逻辑编排**：按照"封面→目标→导入→讲解→案例→练习→总结"的逻辑顺序组织内容
+3. **素材占位定义**：为每页预定义图片、图表等素材需求
+4. **互动设计优化**：根据教学场景和知识点特点，设计合适的互动环节
+5. **准确类型判断**：根据每页的实际内容和教学目的，准确选择最合适的slide_type
+
+## 页面类型体系
+系统支持以下页面类型（slide_type），请根据每页的实际内容和教学目的，选择最合适的类型：
+
+{slide_type_defs}
+
+## 类型选择原则
+- 仔细分析每页的title、bullets和教学目的
+- 选择最能准确描述该页功能和内容特点的slide_type
+- 如果内容同时符合多个类型，选择最核心、最主要的类型
+- 封面页必须使用"title"类型，教学目标页使用"objectives"类型
+
+## 页面分配原则
+
+### 固定页面（必须包含）
+- 封面(title): 1页
+- 目标(objectives): 1页  
+- 总结(summary): 1页
+
+### 知识点内容页分配
+- **简单知识点(easy)**: 1-2页（概念定义 + 要点解析）
+- **中等知识点(medium)**: 2-3页（导入 + 概念定义 + 要点解析）
+- **困难知识点(hard)**: 3-4页（导入 + 概念定义 + 要点解析 + 深入讲解）
+
+### 场景特定页面
+- **理论课(theory)**: 导入页、概念页、要点解析页、案例页（可选）、练习页（可选）
+- **实训课(practice)**: 任务映射页、准备页、步骤页（多个）、注意事项页、巩固页
+- **复习课(review)**: 复习路线页、知识框架页、知识点回顾页、易错点页、典型题页
+
+### 特殊需求页面
+- **案例页**: 根据 special_requirements.cases.count 决定（最多3页）
+- **练习页**: 根据 special_requirements.exercises.total_count 决定（每页约3道题）
+- **互动页**: 根据 special_requirements.interaction.types 决定（每类型1页，最多2页）
+
+## 素材占位定义规范
+每页的assets字段应包含素材占位信息：
+```json
+{{
+  "type": "image|diagram|chart|icon",
+  "theme": "素材主题描述（如'液压系统原理图'）",
+  "size": "small|medium|large|16:9|4:3|1:1",
+  "style": "photo|illustration|schematic|mindmap|flow"
+}}
+```
+
+## 互动设计规范
+interactions字段应包含具体的互动设计：
+- 理论课：提问、案例分析、小组讨论
+- 实训课：操作演示、随堂提问、学员提交
+- 复习课：投票、抢答、现场作答
+
+## 输出要求
+1. 严格按照JSON Schema输出，确保所有字段完整
+2. 页面序号从1开始（index字段）
+3. 每页的bullets应包含3-5个核心要点
+4. 标题应具体明确，体现教学重点
+5. 确保页面数量符合target_count要求（如果指定）
+6. **重要**：每页的slide_type必须从上述页面类型体系中选择，确保类型准确匹配页面内容
+
+只输出JSON对象，不要解释。"""
+
+# 为了向后兼容，保留原来的OUTLINE_PLANNING_SYSTEM_PROMPT变量
+OUTLINE_PLANNING_SYSTEM_PROMPT = _build_outline_planning_prompt()
 
 
 
@@ -53,7 +161,7 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
 
     # --- Common slides ---
     add(
-        "cover",
+        "title",  # 使用slide_type.json中定义的"title"类型
         f"{subj}：{title}",
         [
             "授课人：_____",
@@ -368,9 +476,12 @@ async def generate_outline_with_llm(
     schema_hint = PPTOutline.model_json_schema()
     schema_str = json.dumps(schema_hint, ensure_ascii=False, indent=2)
     
+    # 使用动态生成的prompt
+    system_prompt = _build_outline_planning_prompt()
+    
     # 记录日志
     logger.emit(session_id, "3.3", "llm_planning_prompt", {
-        "system": OUTLINE_PLANNING_SYSTEM_PROMPT,
+        "system": system_prompt,
         "user": user_payload,
         "schema_hint": schema_hint,
     })
@@ -378,7 +489,7 @@ async def generate_outline_with_llm(
     try:
         # 调用LLM进行智能规划
         parsed, meta = await llm.chat_json(
-            OUTLINE_PLANNING_SYSTEM_PROMPT,
+            system_prompt,
             user_msg,
             schema_str,
             temperature=0.3,  # 稍高的温度以获得更多创意
@@ -392,6 +503,9 @@ async def generate_outline_with_llm(
         # 后处理：确保页面数量符合要求
         outline = _adjust_outline_to_target_count(outline, req.slide_requirements.target_count)
         
+        # 后处理：使用LLM更准确地判断每页的slide_type
+        outline = await _refine_slide_types(outline, llm, logger, session_id)
+        
         return outline
         
     except Exception as e:
@@ -401,6 +515,104 @@ async def generate_outline_with_llm(
             "fallback_to_deterministic": True,
         })
         return generate_outline(req, style_name)
+
+
+async def _refine_slide_types(
+    outline: PPTOutline,
+    llm: Any,  # LLMClient
+    logger: Any,  # WorkflowLogger
+    session_id: str,
+) -> PPTOutline:
+    """使用LLM更准确地判断每页的slide_type
+    
+    根据slide_type.json中的定义，对每页的slide_type进行精确判断和修正。
+    """
+    if not llm.is_enabled():
+        return outline
+    
+    slide_type_data = _load_slide_types()
+    available_types = [st["slide_type"] for st in slide_type_data.get("slide_types", [])]
+    slide_type_defs = _get_slide_type_definitions()
+    
+    # 构建类型判断的prompt
+    type_refinement_prompt = f"""你是PPT页面类型判断专家。请根据每页的实际内容（title和bullets），从以下页面类型中选择最准确的一个：
+
+{_get_slide_type_definitions()}
+
+## 判断规则
+1. 仔细分析每页的title和bullets内容
+2. 选择最能准确描述该页功能和内容特点的slide_type
+3. 如果内容同时符合多个类型，选择最核心、最主要的类型
+4. 封面页必须使用"title"类型
+5. 教学目标页必须使用"objectives"类型
+
+## 输入格式
+你将收到一个包含slides数组的JSON对象，每个slide包含：
+- index: 页面序号
+- slide_type: 当前类型（可能需要修正）
+- title: 页面标题
+- bullets: 页面要点列表
+
+## 输出要求
+返回完整的PPTOutline JSON对象，只修改slides数组中每页的slide_type字段，确保：
+- 所有slide_type都在上述可用类型列表中
+- 类型准确匹配页面内容
+- 保持其他字段不变
+
+只输出JSON对象，不要解释。"""
+    
+    # 准备用户消息
+    outline_data = outline.model_dump(mode="json")
+    user_msg = json.dumps({
+        "outline": outline_data,
+        "instruction": "请为每页选择最准确的slide_type，确保类型准确匹配页面内容。"
+    }, ensure_ascii=False, indent=2)
+    
+    # 获取Schema
+    schema_hint = PPTOutline.model_json_schema()
+    schema_str = json.dumps(schema_hint, ensure_ascii=False, indent=2)
+    
+    try:
+        logger.emit(session_id, "3.3", "slide_type_refinement_prompt", {
+            "system": type_refinement_prompt,
+            "user": outline_data,
+        })
+        
+        # 调用LLM进行类型判断
+        parsed, meta = await llm.chat_json(
+            type_refinement_prompt,
+            user_msg,
+            schema_str,
+            temperature=0.1,  # 低温度确保类型判断的准确性
+        )
+        
+        logger.emit(session_id, "3.3", "slide_type_refinement_response", meta)
+        
+        # 验证并返回结果
+        refined_outline = PPTOutline.model_validate(parsed)
+        
+        # 验证所有slide_type都在可用列表中
+        for slide in refined_outline.slides:
+            if slide.slide_type not in available_types:
+                logger.emit(session_id, "3.3", "slide_type_warning", {
+                    "slide_index": slide.index,
+                    "invalid_type": slide.slide_type,
+                    "fallback_to_original": True,
+                })
+                # 如果类型无效，保持原类型
+                original_slide = next((s for s in outline.slides if s.index == slide.index), None)
+                if original_slide:
+                    slide.slide_type = original_slide.slide_type
+        
+        return refined_outline
+        
+    except Exception as e:
+        # 类型判断失败，返回原大纲
+        logger.emit(session_id, "3.3", "slide_type_refinement_error", {
+            "error": str(e),
+            "fallback_to_original": True,
+        })
+        return outline
 
 
 def _adjust_outline_to_target_count(outline: PPTOutline, target_count: Optional[int]) -> PPTOutline:

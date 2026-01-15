@@ -1,0 +1,112 @@
+{
+    "slide_types": [
+      {
+        "slide_type": "title",
+        "name": "标题页",
+        "description": "课件或章节的封面页，用于展示核心标题信息",
+        "instruction": "请提供课程名称、章节标题、主讲人姓名和日期"
+      },
+      {
+        "slide_type": "subtitle",
+        "name": "副标题页",
+        "description": "章节子标题页，用于拆分大主题为子模块",
+        "instruction": "请提供子章节标题和核心内容概述"
+      },
+      {
+        "slide_type": "concept",
+        "name": "概念页",
+        "description": "用于讲解专业术语、基础概念、判定标准",
+        "instruction": "请提供概念名称、定义、关键特征和示例说明"
+      },
+      {
+        "slide_type": "principle",
+        "name": "原理页",
+        "description": "解析现象背后的科学原理、技术逻辑",
+        "instruction": "请提供原理名称、核心公式/逻辑、应用场景"
+      },
+      {
+        "slide_type": "case",
+        "name": "案例页",
+        "description": "深入分析单个典型案例的背景、过程、结果",
+        "instruction": "请提供案例名称、背景信息、分析过程和结论"
+      },
+      {
+        "slide_type": "case_compare",
+        "name": "案例对比页",
+        "description": "横向对比多个案例的异同点，提炼规律",
+        "instruction": "请提供2-4个案例的关键对比维度和数据"
+      },
+      {
+        "slide_type": "data",
+        "name": "数据页",
+        "description": "展示原始数据、统计结果、参数列表",
+        "instruction": "请提供数据类别、具体数值和单位说明"
+      },
+      {
+        "slide_type": "chart",
+        "name": "图表页",
+        "description": "用可视化图表呈现数据关系",
+        "instruction": "请提供图表类型（柱状图/折线图等）、数据系列和坐标轴标签"
+      },
+      {
+        "slide_type": "map",
+        "name": "地图页",
+        "description": "展示空间分布、轨迹路径、区域范围",
+        "instruction": "请提供地理范围、关键地点标注和路径数据"
+      },
+      {
+        "slide_type": "process",
+        "name": "流程页",
+        "description": "按时间或逻辑顺序展示操作、事件流程",
+        "instruction": "请提供流程步骤、每个步骤的具体内容和时间节点"
+      },
+      {
+        "slide_type": "structure",
+        "name": "结构页",
+        "description": "呈现理论框架、系统架构、知识体系",
+        "instruction": "请提供框架名称、层级结构和各部分关系说明"
+      },
+      {
+        "slide_type": "exercise",
+        "name": "习题页",
+        "description": "布置课后习题、课堂思考题",
+        "instruction": "请提供题目内容、选项（选择题）和参考答案"
+      },
+      {
+        "slide_type": "discussion",
+        "name": "讨论页",
+        "description": "提出开放性问题，引导课堂讨论",
+        "instruction": "请提供讨论主题、引导性问题和预期讨论方向"
+      },
+      {
+        "slide_type": "summary",
+        "name": "总结页",
+        "description": "归纳核心知识点、重点、难点",
+        "instruction": "请提供需要总结的3-5个核心要点"
+      },
+      {
+        "slide_type": "transition",
+        "name": "过渡页",
+        "description": "章节衔接页，承接上一章节引出下一章节",
+        "instruction": "请提供上一章节标题和下一章节标题"
+      },
+      {
+        "slide_type": "warning",
+        "name": "注意事项页",
+        "description": "强调研究或应用中的注意事项、易错点",
+        "instruction": "请提供注意事项类别和具体说明"
+      },
+      {
+        "slide_type": "reference",
+        "name": "参考文献页",
+        "description": "列出研究依据的文献、数据来源",
+        "instruction": "请提供文献作者、标题、发表年份和来源"
+      },
+      {
+        "slide_type": "appendix",
+        "name": "附录页",
+        "description": "放置拓展内容、详细数据、代码片段等",
+        "instruction": "请提供附录内容的标题和具体文本"
+      }
+    ]
+  }
