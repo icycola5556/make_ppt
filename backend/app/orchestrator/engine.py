@@ -16,135 +16,17 @@ from ..modules.intent import (
     generate_display_summary, update_page_distribution, check_slide_count_conflict,
     recommend_slide_count_with_llm,
 )
-from ..modules.style import choose_style, build_style_samples
+from ..modules.style import choose_style, build_style_samples, refine_style_with_llm
 from ..modules.outline import generate_outline, generate_outline_with_llm
 from ..modules.outline.core import _refine_slide_types
 from ..modules.content import build_base_deck, refine_with_llm, validate_deck
+from ..prompts.intent import INTENT_SYSTEM_PROMPT, INTENT_SCHEMA_HINT
+from ..prompts.style import STYLE_SYSTEM_PROMPT, STYLE_SCHEMA_HINT
+from ..prompts.outline import OUTLINE_SYSTEM_PROMPT
 
 
 # Enhanced system prompt with Few-Shot examples and tool usage guidance
-INTENT_SYSTEM_PROMPT = """你是高职教学课件意图理解助手。请从教师的自然语言需求中精准抽取结构化信息。
 
-## 核心任务
-从教师的自然语言输入中提取结构化教学需求，确保准确理解教学意图和专业背景。
-
-## 分析原则
-1. **内容驱动的理解**：让教学内容本身指导需求分析，而不是套用固定模板
-2. **专业领域验证**：遇到不熟悉的知识点必须通过工具搜索验证
-3. **合理预估**：基于搜索结果和教学经验进行合理参数预估
-4. **用户体验优先**：提供清晰的确认机制，避免误解用户需求
-
-## 工具使用策略
-- **主动搜索场景**：
-  - 遇到任何不确定的专业术语或知识点名称
-  - 需要了解知识点的教学标准或行业应用
-  - 查找相关的教学案例或实践指导
-  - 验证专业分类是否符合高职教学规范
-
-- **智能搜索技巧**：
-  - 组合关键词：知识点名称 + "高职" + "教学" + "职业教育"
-  - 优先中文搜索，确保符合本土教学场景
-  - 关注最新标准和行业发展趋势
-
-## 处理流程示例
-输入："机械专业液压传动原理的理论课，10页PPT"
-
-1. 识别专业领域：机械工程类
-2. 搜索验证："液压传动原理 高职教学 机械专业"
-3. 提取结构化信息：理论课件、10页要求、机械专业背景
-4. 补充默认配置：案例展示、练习题等
-
-## 设计哲学
-- **精准提取**：宁可少提取也要确保准确，避免过度推测
-- **保守扩展**：在没有外部信息时，不要过度拆分知识点
-- **用户优先**：严格按照用户输入的知识点数量，不要擅自增加
-- **智能评估**：基于专业知识对知识点难度和教学场景进行合理评估
-- **渐进完善**：通过多轮对话完善需求，而不是一次性穷举
-- **专业适配**：根据不同专业特点调整默认参数和建议
-- **教学导向**：始终以提升教学效果为最终目标
-
-## 输出要求
-- 严格JSON格式，无额外解释文字
-- 确保数据完整性和逻辑一致性
-- 提供充分的上下文信息便于后续优化"""
-
-INTENT_SCHEMA_HINT = """{
-  "subject_info": {
-    "subject_name": "string",
-    "subject_category": "engineering|medical|agriculture|arts|business|science|civil|transportation|tourism|food|textile|resources|water|media|public-security|public-service|sports|unknown",
-    "sub_field": "string or null"
-  },
-  "knowledge_points": [
-    {
-      "id": "string",
-      "name": "string",
-      "type": "theory|practice|mixed",
-      "difficulty_level": "easy|medium|hard"
-    }
-  ],
-  "teaching_scenario": {
-    "scene_type": "theory|practice|review|unknown",
-    "scene_label": "string"
-  },
-  "teaching_objectives": {
-    "knowledge": ["string"],
-    "ability": ["string"],
-    "literacy": ["string"]
-  },
-  "slide_requirements": {
-    "target_count": number,
-    "lesson_duration_min": number
-  },
-  "special_requirements": {
-    "cases": {"enabled": boolean, "count": number},
-    "exercises": {"enabled": boolean, "total_count": number},
-    "interaction": {"enabled": boolean, "types": ["string"]}
-  }
-}"""
-
-STYLE_SYSTEM_PROMPT = """你是PPT风格设计助手。你将基于教学场景输出风格配置JSON。
-只输出JSON对象，不要解释。"""
-
-STYLE_SCHEMA_HINT = """{
-  "style_name": "string",
-  "color": {"primary": "#RRGGBB", "secondary": "#RRGGBB", "accent": "#RRGGBB", "text": "#RRGGBB", "background": "#RRGGBB", "warning": "#RRGGBB"},
-  "font": {"title_family": "string", "body_family": "string", "title_size": 34, "body_size": 22, "line_height": 1.2},
-  "layout": {"density": "compact|comfortable", "notes_area": true, "alignment": "left|center"},
-  "imagery": {"image_style": "string", "icon_style": "string", "chart_preference": ["string"]}
-}"""
-
-OUTLINE_SYSTEM_PROMPT = """你是高职课程PPT大纲优化助手，专注于创建高质量的教学演示文稿结构。
-
-## 设计哲学
-- **内容驱动的选择**：让每页的内容目的决定标题和要点设计，而不是套用固定格式
-- **教学逻辑递进**：确保页面间的逻辑流畅，符合学生的认知规律
-- **实用性优先**：避免华而不实的表达，追求清晰实用的教学内容
-- **受众适配**：针对高职学生的特点优化语言和内容深度
-
-## 优化原则
-1. **标题优化**：
-   - 使用具体、明确的标题，避免抽象的概念
-   - 体现教学重点和学生关心的内容
-   - 符合高职教学的实用导向
-
-2. **要点提炼**：
-   - 每页3-5个要点，控制信息密度
-   - 使用学生熟悉的语言和表达方式
-   - 突出关键概念和操作步骤
-   - 体现教学的递进关系
-
-3. **结构保持**：
-   - 维持原始slide数量和类型
-   - 基于slide_type优化内容表达
-   - 确保逻辑连贯性和教学完整性
-
-## 教学内容特点
-- **实践导向**：强调实用技能和操作能力
-- **案例结合**：融入实际工作场景和案例
-- **层次清晰**：从基础概念到应用实践的递进
-- **互动性强**：便于教师讲解和学生理解
-
-只输出JSON对象，不要解释。"""
 
 
 class WorkflowEngine:
@@ -389,8 +271,10 @@ class WorkflowEngine:
         return req
 
     async def _design_style(self, session_id: str, req: TeachingRequest) -> Tuple[StyleConfig, List[StyleSampleSlide]]:
+        print(f"DEBUG: Entering _design_style for {session_id}")
         # Start from deterministic templates
         cfg = choose_style(req)
+        print(f"DEBUG: choose_style returned: {cfg}")
         samples = build_style_samples(req, cfg)
         self.logger.emit(session_id, "3.2", "style_base", {"style_config": cfg.model_dump(mode="json"), "style_samples": [s.model_dump(mode="json") for s in samples]})
 
@@ -1024,3 +908,42 @@ class WorkflowEngine:
 
         return state, "ok", []
 
+    async def refine_style(self, session_id: str, feedback: str) -> Tuple[Optional[StyleConfig], List[StyleSampleSlide], List[str]]:
+        """
+        Human-in-the-loop: Refine style configuration based on user feedback.
+        Returns: (NewConfig, NewSamples, Warnings)
+        """
+        state = self.store.load(session_id)
+        if not state or not state.style_config:
+            return None, [], ["Session or style config not found"]
+
+        try:
+            # 1. Refine Config
+            new_config, warnings = await refine_style_with_llm(
+                session_id=session_id,
+                current_config=state.style_config,
+                feedback=feedback,
+                llm=self.llm,
+                logger=self.logger
+            )
+
+            # 2. Regenerate Samples
+            new_samples = build_style_samples(state.teaching_request, new_config)
+
+            # 3. Update State
+            state.style_config = new_config
+            state.style_samples = new_samples
+            
+            # Log the interaction
+            self.logger.emit(session_id, "3.2", "style_refined", {
+                "feedback": feedback, 
+                "warnings": warnings,
+                "diff_summary": "TODO"
+            })
+            
+            self.store.save(state)
+            return new_config, new_samples, warnings
+            
+        except Exception as e:
+            self.logger.emit(session_id, "3.2", "refine_engine_error", {"error": str(e)})
+            raise e

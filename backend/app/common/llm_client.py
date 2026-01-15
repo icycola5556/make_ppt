@@ -37,6 +37,38 @@ class LLMClient:
     def is_enabled(self) -> bool:
         return self.mode != "mock" and bool(self.api_key)
 
+    async def chat(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        thinking: Optional[str] = "enabled",
+    ) -> str:
+        """Standard chat completion returning text string."""
+        if not self.is_enabled():
+            raise RuntimeError("LLM disabled")
+
+        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        
+        if thinking in ("enabled", "disabled"):
+            payload["thinking"] = {"type": thinking}
+
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            r = await client.post(url, headers=headers, json=payload)
+            r.raise_for_status()
+            data = r.json()
+
+        return data["choices"][0]["message"].get("content") or ""
+
     async def chat_json(
         self,
         system: str,

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ...common.schemas import OutlineSlide, PPTOutline, TeachingRequest
+from ...prompts.outline import OUTLINE_PLANNING_SYSTEM_PROMPT
 
 # 加载slide_type定义
 _SLIDE_TYPE_JSON_PATH = Path(__file__).parent / "slide_type.json"
@@ -48,9 +49,6 @@ def _deck_title(req: TeachingRequest) -> str:
     return "知识点课件"
 
 
-# ============================================================================
-# LLM智能规划系统提示词
-# ============================================================================
 
 def _build_outline_planning_prompt() -> str:
     """构建大纲规划系统提示词，动态包含slide_type定义"""
@@ -127,6 +125,7 @@ interactions字段应包含具体的互动设计：
 
 # 为了向后兼容，保留原来的OUTLINE_PLANNING_SYSTEM_PROMPT变量
 OUTLINE_PLANNING_SYSTEM_PROMPT = _build_outline_planning_prompt()
+
 
 
 # ============================================================================
