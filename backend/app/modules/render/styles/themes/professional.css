@@ -1,0 +1,23 @@
+/**
+ * 主题: 专业严谨 (Professional)
+ * 适用场景: 机械、电气等工科专业
+ */
+
+:root {
+    /* 主色调 - 深蓝灰 */
+    --color-primary: #2c3e50;
+    --color-secondary: #34495e;
+    --color-accent: #3498db;
+
+    /* 文本颜色 */
+    --color-text: #2c3e50;
+    --color-text-secondary: #7f8c8d;
+    --color-text-muted: #95a5a6;
+
+    /* 背景颜色 */
+    --color-background: #ffffff;
+    --color-muted: #ecf0f1;
+
+    /* 警示色 */
+    --color-warning: #e74c3c;
+}

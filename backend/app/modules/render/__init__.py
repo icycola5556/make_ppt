@@ -10,6 +10,8 @@ from .schemas import (
     AspectRatio,
     ColorConstraint,
 )
+from .html_renderer import render_html_slides
+from .layout_configs import VOCATIONAL_LAYOUTS
 
 __all__ = [
     "ImageSlotRequest",
@@ -18,4 +20,6 @@ __all__ = [
     "ImageStyle",
     "AspectRatio",
     "ColorConstraint",
+    "render_html_slides",
+    "VOCATIONAL_LAYOUTS",
 ]

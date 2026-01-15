@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ deck_title }}</title>
+    
+    <!-- Reveal.js 核心样式 (本地) -->
+    <link rel="stylesheet" href="./static/reveal.js/reveal.js-4.6.1/dist/reveal.css">
+    <link rel="stylesheet" href="./static/reveal.js/reveal.js-4.6.1/dist/theme/white.css">
+    
+    <!-- 字体配置 (系统字体栈) -->
+    <link rel="stylesheet" href="./static/fonts/fonts.css">
+    
+    <!-- 自定义样式 -->
+    <link rel="stylesheet" href="./styles/layouts/vocational.css">
+    <link rel="stylesheet" href="./styles/components/image-slot.css">
+    <link rel="stylesheet" href="./styles/themes/{{ theme_name }}.css">
+    
+    <style>
+        /* CSS Variables - 从 StyleConfig 动态生成 */
+        :root {
+            {{ css_variables | safe }}
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            {% for slide in slides %}
+                {% include 'slide.html' %}
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Reveal.js 核心脚本 (本地) -->
+    <script src="./static/reveal.js/reveal.js-4.6.1/dist/reveal.js"></script>
+    
+    <script>
+        // Reveal.js 配置 (导出友好,无 3D 效果)
+        Reveal.initialize({
+            width: 1920,
+            height: 1080,
+            margin: 0.04,
+            
+            // 禁用复杂动画
+            transition: 'slide',
+            transitionSpeed: 'default',
+            backgroundTransition: 'fade',
+            
+            // 禁用 3D 效果
+            parallaxBackgroundImage: '',
+            parallaxBackgroundSize: '',
+            
+            // 控制选项
+            controls: true,
+            progress: true,
+            center: false,
+            hash: true,
+            
+            // 键盘导航
+            keyboard: true,
+            overview: true,
+            touch: true,
+            
+            // 插件 (可选)
+            plugins: []
+        });
+    </script>
+</body>
+</html>

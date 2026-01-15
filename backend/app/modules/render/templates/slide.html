@@ -1,0 +1,18 @@
+<section class="slide-{{ slide.layout_id }}" data-slide-type="{{ slide.slide_type }}">
+    {% if slide.layout_id == 'title_only' %}
+    {% include 'layouts/title_only.html' %}
+    {% elif slide.layout_id == 'title_bullets' %}
+    {% include 'layouts/title_bullets.html' %}
+    {% elif slide.layout_id == 'title_bullets_right_img' %}
+    {% include 'layouts/title_bullets_right_img.html' %}
+    {% elif slide.layout_id == 'operation_steps' %}
+    {% include 'layouts/operation_steps.html' %}
+    {% elif slide.layout_id == 'concept_comparison' %}
+    {% include 'layouts/concept_comparison.html' %}
+    {% elif slide.layout_id == 'grid_4' %}
+    {% include 'layouts/grid_4.html' %}
+    {% else %}
+    <!-- 默认布局 -->
+    {% include 'layouts/title_bullets.html' %}
+    {% endif %}
+</section>
