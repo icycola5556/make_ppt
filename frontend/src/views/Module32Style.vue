@@ -167,6 +167,63 @@
         </div>
       </div>
       
+      <!-- 风格微调交互区 (Style Refinement) -->
+      <div class="refine-section" v-if="styleConfig">
+        <div class="h4">
+          <span>✨ 风格微调 (AI Designer)</span>
+          <div class="tooltip-container">
+            <span class="tooltip-icon">💡 支持修改项</span>
+            <div class="tooltip-content">
+              <ul>
+                <li><strong>色彩:</strong> "换个暖色调", "背景深一点", "主色改成#ff0000"</li>
+                <li><strong>字体:</strong> "标题用黑体", "正文大一点"</li>
+                <li><strong>布局:</strong> "更宽松一点", "卡片圆角大一点"</li>
+                <li><strong>风格:</strong> "赛博朋克风", "极简风格"</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div class="refine-box">
+          <textarea 
+            class="refine-input" 
+            v-model="refineText" 
+            placeholder="对当前风格不满意？试试告诉我：'换个更有科技感的配色' 或 '标题字号加大'..."
+            :disabled="refineBusy"
+            @keydown.enter.ctrl.prevent="handleRefine"
+          ></textarea>
+          
+          <div class="refine-actions">
+            <div class="history-actions">
+              <button class="icon-btn" @click="undoStyle" :disabled="styleHistory.length === 0" title="撤销 (Undo)">
+                ↩️ 撤销
+              </button>
+            </div>
+            <button class="primary-btn" @click="handleRefine" :disabled="refineBusy || !refineText.trim()">
+              {{ refineBusy ? '调整中...' : '✨ 确认调整' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 警告确认弹窗 -->
+      <div v-if="showRefineWarning" class="modal-overlay">
+        <div class="modal">
+          <div class="modal-header warning">⚠️ 风格调整警告</div>
+          <div class="modal-body">
+            <p>AI 检测到调整后的风格存在潜在问题：</p>
+            <ul>
+              <li v-for="(w, i) in refineWarnings" :key="i">{{ w }}</li>
+            </ul>
+            <p>这可能会影响演示文稿的可读性。是否仍要应用此修改？</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn" @click="cancelRefine">取消修改</button>
+            <button class="btn danger" @click="confirmRefine">确认应用 (风险)</button>
+          </div>
+        </div>
+      </div>
+      
       <!-- 样例幻灯片 -->
       <div v-if="styleSamples && styleSamples.length" class="samples-section">
         <div class="h4">样例幻灯片预览</div>
@@ -180,7 +237,11 @@
             <div class="slide-header" :style="{ borderBottom: `2px solid ${styleConfig.color.primary}` }">
               <span class="slide-kind">{{ slide.kind }}</span>
             </div>
-            <div class="slide-title" :style="{ color: styleConfig.color.primary, fontFamily: styleConfig.font.title_family }">
+            <div class="slide-title" :style="{ 
+              color: styleConfig.color.primary, 
+              fontFamily: getFontStack(styleConfig.font.title_family),
+              fontSize: `${Math.min(styleConfig.font.title_size / 2.5, 18)}px`
+            }">
               {{ slide.title }}
             </div>
             <ul class="slide-bullets">
@@ -205,10 +266,18 @@ import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 
-const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, styleSamples, reset, runWorkflow } = useWorkflow()
+const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, styleSamples, sessionId, reset, runWorkflow } = useWorkflow()
 
 const testCaseList = testCases
 const rawText = ref('')
+
+// --- Style Refinement State ---
+const refineText = ref('')
+const refineBusy = ref(false)
+const styleHistory = ref([])  // For undo functionality
+const showRefineWarning = ref(false)
+const refineWarnings = ref([])
+const pendingRefineConfig = ref(null)
 
 const orderedColorKeys = ['primary', 'secondary', 'accent', 'muted', 'text', 'background', 'surface', 'warning', 'background_gradient']
 const colorLabels = {
@@ -230,6 +299,23 @@ function getShadowStyle(shadowType) {
 }
 
 // Simple logic to decide text color on color chips
+// 字体栈映射，确保中文字体有备选方案
+const FONT_STACK_MAP = {
+  '黑体': '"SimHei", "Heiti SC", "Microsoft YaHei", sans-serif',
+  'SimHei': '"SimHei", "Heiti SC", "Microsoft YaHei", sans-serif',
+  '宋体': '"SimSun", "Songti SC", serif',
+  'SimSun': '"SimSun", "Songti SC", serif',
+  '楷体': '"KaiTi", "Kaiti SC", serif',
+  'KaiTi': '"KaiTi", "Kaiti SC", serif',
+  '微软雅黑': '"Microsoft YaHei", "PingFang SC", sans-serif',
+  'Microsoft YaHei': '"Microsoft YaHei", "PingFang SC", sans-serif',
+}
+
+function getFontStack(fontFamily) {
+  if (!fontFamily) return 'sans-serif'
+  return FONT_STACK_MAP[fontFamily] || `"${fontFamily}", sans-serif`
+}
+
 function getTextColor(hexColor) {
   if (!hexColor || typeof hexColor !== 'string' || !hexColor.startsWith('#')) return '#000'
   const hex = hexColor.replace('#', '')
@@ -259,6 +345,86 @@ async function submitAnswers(useDefaults) {
   } catch (e) {
     err.value = e.message
   }
+}
+
+// --- Style Refinement Handlers ---
+async function handleRefine() {
+  if (!refineText.value.trim() || refineBusy.value) return
+  
+  refineBusy.value = true
+  try {
+    // Save current state for undo
+    if (styleConfig.value) {
+      styleHistory.value.push(JSON.parse(JSON.stringify(styleConfig.value)))
+    }
+    
+    const res = await fetch(`http://localhost:8000/api/workflow/style/refine`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId.value,
+        feedback: refineText.value
+      })
+    })
+    const data = await res.json()
+    
+    if (data.warnings && data.warnings.length > 0) {
+      // Show warning dialog
+      refineWarnings.value = data.warnings
+      pendingRefineConfig.value = data.style_config
+      showRefineWarning.value = true
+    } else {
+      // Apply new config directly
+      styleConfig.value = data.style_config
+      styleSamples.value = data.style_samples || []
+      refineText.value = ''
+    }
+  } catch (e) {
+    err.value = e.message
+  } finally {
+    refineBusy.value = false
+  }
+}
+
+async function undoStyle() {
+  if (styleHistory.value.length === 0) return
+  const previousConfig = styleHistory.value.pop()
+  styleConfig.value = previousConfig
+  
+  // 同步撤销状态到后端，确保下次 refine 使用正确的基础配置
+  try {
+    await fetch(`http://localhost:8000/api/workflow/style/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId.value,
+        style_config: previousConfig
+      })
+    })
+  } catch (e) {
+    console.warn('Failed to sync undo to backend:', e)
+    // 即使同步失败，本地撤销仍然生效
+  }
+}
+
+function cancelRefine() {
+  showRefineWarning.value = false
+  refineWarnings.value = []
+  pendingRefineConfig.value = null
+  // Pop the history entry we added
+  if (styleHistory.value.length > 0) {
+    styleHistory.value.pop()
+  }
+}
+
+function confirmRefine() {
+  if (pendingRefineConfig.value) {
+    styleConfig.value = pendingRefineConfig.value
+    refineText.value = ''
+  }
+  showRefineWarning.value = false
+  refineWarnings.value = []
+  pendingRefineConfig.value = null
 }
 </script>
 
@@ -377,4 +543,216 @@ async function submitAnswers(useDefaults) {
 
 .color-item .color-label { font-size: 10px; opacity: 0.8; margin-top: auto; padding-bottom: 4px; }
 .color-item .color-value { font-size: 12px; font-weight: 700; font-family: monospace; letter-spacing: 0.5px; }
+/* Refinement Section */
+.refine-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.refine-box {
+  background: linear-gradient(to bottom, #f8fafc, #fff);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.refine-input {
+  width: 100%;
+  min-height: 80px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+  background: #fff;
+}
+
+.refine-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.refine-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-actions .icon-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: #64748b;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-actions .icon-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.history-actions .icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+  transition: all 0.2s;
+}
+
+.primary-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(79, 70, 229, 0.3);
+}
+
+.primary-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Tooltip */
+.tooltip-container {
+  display: inline-block;
+  position: relative;
+  margin-left: 8px;
+  cursor: help;
+}
+
+.tooltip-icon {
+  font-size: 12px;
+  background: #eff6ff;
+  color: #3b82f6;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid #bfdbfe;
+}
+
+.tooltip-content {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 150%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  background: #1e293b;
+  color: #fff;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  z-index: 100;
+  transition: all 0.2s;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.tooltip-content::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -6px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: #1e293b transparent transparent transparent;
+}
+
+.tooltip-container:hover .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+  bottom: 120%;
+}
+
+.tooltip-content ul {
+  margin: 0;
+  padding-left: 16px;
+  text-align: left;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 480px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalPop {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.modal-header.warning {
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 16px 24px;
+  font-weight: 600;
+  font-size: 18px;
+  border-bottom: 1px solid #fee2e2;
+}
+
+.modal-body {
+  padding: 24px;
+  color: #334155;
+}
+
+.modal-body ul {
+  background: #fff1f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 12px 12px 12px 32px;
+  color: #be123c;
+  margin: 16px 0;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  background: #f8fafc;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn.danger {
+  background: #dc2626;
+  color: white;
+  border: none;
+}
+.btn.danger:hover {
+  background: #b91c1c;
+}
 </style>

@@ -16,7 +16,7 @@ from ..modules.intent import (
     generate_display_summary, update_page_distribution, check_slide_count_conflict,
     recommend_slide_count_with_llm,
 )
-from ..modules.style import choose_style, build_style_samples
+from ..modules.style import choose_style, build_style_samples, refine_style_with_llm
 from ..modules.outline import generate_outline, generate_outline_with_llm
 from ..modules.content import build_base_deck, refine_with_llm, validate_deck
 from ..prompts.intent import INTENT_SYSTEM_PROMPT, INTENT_SCHEMA_HINT
@@ -270,8 +270,10 @@ class WorkflowEngine:
         return req
 
     async def _design_style(self, session_id: str, req: TeachingRequest) -> Tuple[StyleConfig, List[StyleSampleSlide]]:
+        print(f"DEBUG: Entering _design_style for {session_id}")
         # Start from deterministic templates
         cfg = choose_style(req)
+        print(f"DEBUG: choose_style returned: {cfg}")
         samples = build_style_samples(req, cfg)
         self.logger.emit(session_id, "3.2", "style_base", {"style_config": cfg.model_dump(mode="json"), "style_samples": [s.model_dump(mode="json") for s in samples]})
 
@@ -894,3 +896,42 @@ class WorkflowEngine:
 
         return state, "ok", []
 
+    async def refine_style(self, session_id: str, feedback: str) -> Tuple[Optional[StyleConfig], List[StyleSampleSlide], List[str]]:
+        """
+        Human-in-the-loop: Refine style configuration based on user feedback.
+        Returns: (NewConfig, NewSamples, Warnings)
+        """
+        state = self.store.load(session_id)
+        if not state or not state.style_config:
+            return None, [], ["Session or style config not found"]
+
+        try:
+            # 1. Refine Config
+            new_config, warnings = await refine_style_with_llm(
+                session_id=session_id,
+                current_config=state.style_config,
+                feedback=feedback,
+                llm=self.llm,
+                logger=self.logger
+            )
+
+            # 2. Regenerate Samples
+            new_samples = build_style_samples(state.teaching_request, new_config)
+
+            # 3. Update State
+            state.style_config = new_config
+            state.style_samples = new_samples
+            
+            # Log the interaction
+            self.logger.emit(session_id, "3.2", "style_refined", {
+                "feedback": feedback, 
+                "warnings": warnings,
+                "diff_summary": "TODO"
+            })
+            
+            self.store.save(state)
+            return new_config, new_samples, warnings
+            
+        except Exception as e:
+            self.logger.emit(session_id, "3.2", "refine_engine_error", {"error": str(e)})
+            raise e

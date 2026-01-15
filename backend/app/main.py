@@ -13,7 +13,14 @@ from fastapi.staticfiles import StaticFiles
 # 使用新的模块化导入
 from .common import LLMClient, WorkflowLogger, SessionStore, WorkflowRunRequest, WorkflowRunResponse
 from .orchestrator import WorkflowEngine
-
+from .common import (
+    LLMClient, WorkflowLogger, SessionStore, 
+    WorkflowRunRequest, WorkflowRunResponse,
+    StyleConfig, StyleSampleSlide
+)
+from .orchestrator import WorkflowEngine
+from pydantic import BaseModel
+from typing import List, Optional
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -125,6 +132,60 @@ def get_session(session_id: str):
 def get_logs(session_id: str):
     return logger.read_all(session_id)
 
+
+
+class StyleRefineRequest(BaseModel):
+    session_id: str
+    feedback: str
+
+class StyleRefineResponse(BaseModel):
+    ok: bool
+    style_config: Optional[StyleConfig]
+    style_samples: List[StyleSampleSlide]
+    warnings: List[str]
+    error: Optional[str] = None
+
+@app.post("/api/workflow/style/refine", response_model=StyleRefineResponse)
+async def refine_style(req: StyleRefineRequest):
+    try:
+        cfg, samples, warnings = await engine.refine_style(req.session_id, req.feedback)
+        return StyleRefineResponse(
+            ok=True,
+            style_config=cfg,
+            style_samples=samples,
+            warnings=warnings
+        )
+    except Exception as e:
+        logger.emit(req.session_id, "3.2", "refine_api_error", {"error": str(e)})
+        return StyleRefineResponse(
+            ok=False,
+            style_config=None,
+            style_samples=[],
+            warnings=[],
+            error=str(e)
+        )
+
+
+class StyleSyncRequest(BaseModel):
+    session_id: str
+    style_config: StyleConfig
+
+
+@app.post("/api/workflow/style/sync")
+async def sync_style(req: StyleSyncRequest):
+    """同步风格配置到后端（支持撤销操作）"""
+    try:
+        state = store.load(req.session_id)
+        if not state:
+            return {"ok": False, "error": "Session not found"}
+        
+        state.style_config = req.style_config
+        store.save(state)
+        logger.emit(req.session_id, "3.2", "style_synced", {"source": "undo"})
+        return {"ok": True}
+    except Exception as e:
+        logger.emit(req.session_id, "3.2", "sync_error", {"error": str(e)})
+        return {"ok": False, "error": str(e)}
 
 # Serve frontend (pure static) for easy demo
 if os.path.isdir(FRONTEND_DIR):

@@ -12,6 +12,9 @@ from ...common.schemas import (
     StyleSampleSlide,
     TeachingRequest,
 )
+from ...common import LLMClient
+from ...prompts.style import STYLE_REFINE_PROMPT
+import json
 
 # ... (STYLE_TEMPLATES omitted for brevity, assuming replace_file_content handles boundaries correctly. 
 # Wait, I need to touch imports at top and choose_style at bottom.
@@ -56,15 +59,15 @@ STYLE_TEMPLATES = {
     "theory_clean": {
         "style_name": "theory_clean",
         "color": {
-            "primary": "#1F4E79",
-            "secondary": "#F3F5F7",
-            "accent": "#2E75B6",
-            "muted": "#94A3B8",
-            "text": "#111827",
+            "primary": "#3D5A80",
+            "secondary": "#F0F4F8",
+            "accent": "#5B8DB8",
+            "muted": "#98B4C8",
+            "text": "#1A202C",
             "background": "#FFFFFF",
-            "warning": "#DC2626",
-            "surface": "#FFFFFF",
-            "background_gradient": "linear-gradient(135deg, #FDFBFB 0%, #EBEDEE 100%)",
+            "warning": "#E53E3E",
+            "surface": "#F8FAFC",
+            "background_gradient": "linear-gradient(135deg, #FDFBFB 0%, #EBF0F5 100%)",
         },
         "font": {
             "title_family": "Microsoft YaHei",
@@ -95,14 +98,14 @@ STYLE_TEMPLATES = {
     "practice_steps": {
         "style_name": "practice_steps",
         "color": {
-            "primary": "#166534",
-            "secondary": "#F0FDF4",
-            "accent": "#22C55E",
-            "muted": "#9CA3AF",
-            "text": "#0F172A",
+            "primary": "#2D6A4F",
+            "secondary": "#E9F5EC",
+            "accent": "#52B788",
+            "muted": "#8FBCA8",
+            "text": "#1A202C",
             "background": "#FFFFFF",
-            "warning": "#DC2626",
-            "surface": "#F8FAFC",
+            "warning": "#E53E3E",
+            "surface": "#F5FAF7",
             "background_gradient": None,
         },
         "font": {
@@ -135,15 +138,15 @@ STYLE_TEMPLATES = {
     "review_mindmap": {
         "style_name": "review_mindmap",
         "color": {
-            "primary": "#4C1D95",
-            "secondary": "#F5F3FF",
-            "accent": "#7C3AED",
-            "muted": "#A78BFA",
-            "text": "#111827",
+            "primary": "#5C4B7D",
+            "secondary": "#F5F3F8",
+            "accent": "#7E6BA8",
+            "muted": "#A8A0BC",
+            "text": "#1A202C",
             "background": "#FFFFFF",
-            "warning": "#DC2626",
-            "surface": "#FFFFFF",
-            "background_gradient": "linear-gradient(to top, #f3e7e9 0%, #e3eeff 99%, #e3eeff 100%)",
+            "warning": "#E53E3E",
+            "surface": "#FAF9FC",
+            "background_gradient": "linear-gradient(to top, #F3E7E9 0%, #E3EEFF 100%)",
         },
         "font": {
             "title_family": "Microsoft YaHei",
@@ -175,24 +178,170 @@ STYLE_TEMPLATES = {
 }
 
 PROFESSIONAL_PALETTES = {
-    "engineering": {"primary": "#1F4E79", "secondary": "#F1F5F9", "accent": "#0EA5E9", "muted": "#94A3B8"},
-    "medical": {"primary": "#0D9488", "secondary": "#F0FDFA", "accent": "#14B8A6", "muted": "#9CA3AF"},
-    "agriculture": {"primary": "#15803D", "secondary": "#F0FDF4", "accent": "#84CC16", "muted": "#71717A"},
-    "arts": {"primary": "#BE123C", "secondary": "#FFF1F2", "accent": "#FB7185", "muted": "#A1A1AA"},
-    "business": {"primary": "#1E3A8A", "secondary": "#EFF6FF", "accent": "#F59E0B", "muted": "#6B7280"},
-    "science": {"primary": "#6D28D9", "secondary": "#F5F3FF", "accent": "#8B5CF6", "muted": "#A78BFA"},
-    "civil": {"primary": "#9A3412", "secondary": "#FFEDD5", "accent": "#EA580C", "muted": "#A8A29E"},
-    "transportation": {"primary": "#0369A1", "secondary": "#E0F2FE", "accent": "#38BDF8", "muted": "#94A3B8"},
-    "tourism": {"primary": "#EA580C", "secondary": "#FFF7ED", "accent": "#FDBA74", "muted": "#D6D3D1"},
-    "food": {"primary": "#D97706", "secondary": "#FEF3C7", "accent": "#FCD34D", "muted": "#D4D4D8"},
-    "textile": {"primary": "#C026D3", "secondary": "#FAE8FF", "accent": "#E879F9", "muted": "#D8B4FE"},
-    "resources": {"primary": "#475569", "secondary": "#F8FAFC", "accent": "#64748B", "muted": "#94A3B8"},
-    "water": {"primary": "#0891B2", "secondary": "#ECFEFF", "accent": "#06B6D4", "muted": "#A5F3FC"},
-    "media": {"primary": "#DC2626", "secondary": "#FEF2F2", "accent": "#EF4444", "muted": "#FCA5A5"},
-    "public-security": {"primary": "#172554", "secondary": "#F0F9FF", "accent": "#3B82F6", "muted": "#64748B"},
-    "public-service": {"primary": "#059669", "secondary": "#ECFDF5", "accent": "#34D399", "muted": "#9CA3AF"},
-    "sports": {"primary": "#2563EB", "secondary": "#EFF6FF", "accent": "#FBBF24", "muted": "#93C5FD"},
+    # 1. Engineering: Steel Blue family (Stability, Precision)
+    # 主色与强调色保持蓝色系协调
+    "engineering": {
+        "primary": "#4A6FA5",   # Morandi Blue
+        "secondary": "#F0F4F8", # Cool Grey Surface
+        "accent": "#6B9BD1",    # Lighter Steel Blue (同色系提亮)
+        "muted": "#8898AA",     # Steel Grey
+        "background_gradient": "linear-gradient(135deg, #F5F7FA 0%, #C3CFE2 100%)"
+    },
+    # 2. Medical: Teal family (Healing, Calm)
+    # 青绿色系统一
+    "medical": {
+        "primary": "#5F9EA0",   # Cadet Blue / Sage
+        "secondary": "#F5FFFA", # Mint Cream
+        "accent": "#7EC8C8",    # Light Teal (同色系提亮)
+        "muted": "#9EB2B5",     # Greyish Teal
+        "background_gradient": "linear-gradient(to top, #e6e9f0 0%, #eef1f5 100%)" 
+    },
+    # 3. Agriculture: Green family (Growth, Nature)
+    # 绿色系从深到浅
+    "agriculture": {
+        "primary": "#556B2F",   # Dark Olive Green
+        "secondary": "#FFFFF0", # Ivory
+        "accent": "#7BA05B",    # Moss Green (同色系提亮)
+        "muted": "#8FBC8F",     # Dark Sea Green
+        "background_gradient": "linear-gradient(120deg, #fdfbfb 0%, #ebedee 100%)"
+    },
+    # 4. Arts: Rose/Mauve family (Creativity, Humanism)
+    # 玫瑰色系协调
+    "arts": {
+        "primary": "#B06579",   # Dusty Rose
+        "secondary": "#FFF5F7", # Lavender Blush
+        "accent": "#D4899D",    # Light Rose (同色系提亮)
+        "muted": "#BC8F8F",     # Rosy Brown
+        "background_gradient": "linear-gradient(to top, #fad0c4 0%, #ffd1ff 100%)"
+    },
+    # 5. Business: Navy Blue family (Trust, Professionalism)
+    # 深蓝色系统一，不用金色
+    "business": {
+        "primary": "#3E517A",   # Muted Navy
+        "secondary": "#F8F9FA", # Off White
+        "accent": "#6B82A8",    # Light Navy (同色系提亮)
+        "muted": "#708090",     # Slate Grey
+        "background_gradient": "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)"
+    },
+    # 6. Science: Purple/Indigo family (Mystery, Depth)
+    # 紫色系从深到浅
+    "science": {
+        "primary": "#483D8B",   # Dark Slate Blue
+        "secondary": "#F5F5F5", # White Smoke
+        "accent": "#7B68EE",    # Medium Slate Blue (同色系提亮)
+        "muted": "#778899",     # Light Slate Grey
+        "background_gradient": "linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)"
+    },
+    # 7. Civil: Terracotta/Brown family (Structure, Grounded)
+    # 棕色暖色系
+    "civil": {
+        "primary": "#A0522D",   # Sienna
+        "secondary": "#FAF0E6", # Linen
+        "accent": "#C4835A",    # Light Sienna (同色系提亮)
+        "muted": "#D2B48C",     # Tan
+        "background_gradient": "linear-gradient(to right, #ece9e6, #ffffff)"
+    },
+    # 8. Transportation: Steel Blue family (Speed, Flow)
+    # 钢蓝色统一
+    "transportation": {
+        "primary": "#4682B4",   # Steel Blue
+        "secondary": "#F0F8FF", # Alice Blue
+        "accent": "#87CEEB",    # Sky Blue (同色系提亮)
+        "muted": "#A9A9A9",     # Dark Grey
+        "background_gradient": "linear-gradient(to top, #e6e9f0 0%, #eef1f5 100%)"
+    },
+    # 9. Tourism: Coral/Salmon family (Warmth, Leisure)
+    # 暖橙色系
+    "tourism": {
+        "primary": "#E9967A",   # Dark Salmon
+        "secondary": "#FFFAF0", # Floral White
+        "accent": "#FFB299",    # Light Coral (同色系提亮)
+        "muted": "#D2B48C",     # Tan
+        "background_gradient": "linear-gradient(to top, #fff1eb 0%, #ffecd2 100%)"
+    },
+    # 10. Food: Warm Brown/Orange family (Appetizing, Natural)
+    # 暖棕橙色系
+    "food": {
+        "primary": "#D2691E",   # Chocolate
+        "secondary": "#FFF8DC", # Cornsilk
+        "accent": "#E8A64C",    # Warm Orange (同色系提亮)
+        "muted": "#DEB887",     # Burlywood
+        "background_gradient": "linear-gradient(120deg, #ffecd2 0%, #fcb69f 100%)"
+    },
+    # 11. Textile: Purple/Lavender family (Softness, Fabric)
+    # 紫色系统一
+    "textile": {
+        "primary": "#9F79EE",   # Muted Purple
+        "secondary": "#FFF0F5", # Lavender Blush
+        "accent": "#B8A0E8",    # Light Lavender (同色系提亮)
+        "muted": "#D8BFD8",     # Thistle
+        "background_gradient": "linear-gradient(to top, #e8e0f0 0%, #f8f0ff 100%)"
+    },
+    # 12. Resources: Slate Grey family (Earth, Solidity)
+    # 灰色系统一
+    "resources": {
+        "primary": "#475569",   # Slate 600
+        "secondary": "#F1F5F9", # Slate 100
+        "accent": "#64748B",    # Slate 500 (同色系提亮)
+        "muted": "#CBD5E1",     # Slate 300
+        "background_gradient": "linear-gradient(135deg, #e0eaec 0%, #f0f7f9 100%)"
+    },
+    # 13. Water: Cyan/Teal family (Fluidity, Clarity)
+    # 青蓝色系
+    "water": {
+        "primary": "#008B8B",   # Dark Cyan
+        "secondary": "#F0FFFF", # Azure
+        "accent": "#20B2AA",    # Light Sea Green (同色系提亮)
+        "muted": "#5F9EA0",     # Cadet Blue
+        "background_gradient": "linear-gradient(to top, #accbee 0%, #e7f0fd 100%)"
+    },
+    # 14. Media: Red family (Boldness, Attention)
+    # 红色系统一
+    "media": {
+        "primary": "#B22222",   # Firebrick
+        "secondary": "#FFFAFA", # Snow
+        "accent": "#DC4545",    # Bright Red (同色系提亮)
+        "muted": "#808080",     # Grey
+        "background_gradient": "linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)"
+    },
+    # 15. Public Security: Dark Grey/Blue family (Authority, Safety)
+    # 深灰蓝色系
+    "public-security": {
+        "primary": "#2F4F4F",   # Dark Slate Gray
+        "secondary": "#F5F5F5", # White Smoke
+        "accent": "#4F6F6F",    # Light Slate (同色系提亮)
+        "muted": "#A9A9A9",     # Dark Gray
+        "background_gradient": "linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)"
+    },
+    # 16. Public Service: Green family (Service, Approachable)
+    # 绿色系统一
+    "public-service": {
+        "primary": "#2E8B57",   # Sea Green
+        "secondary": "#F0FFF0", # Honeydew
+        "accent": "#50C878",    # Emerald (同色系提亮)
+        "muted": "#8FBC8F",     # Dark Sea Green
+        "background_gradient": "linear-gradient(120deg, #e8f5e8 0%, #f0fff0 100%)"
+    },
+    # 17. Sports: Blue family (Energy, Activity)
+    # 蓝色系统一，不用对比橙色
+    "sports": {
+        "primary": "#4169E1",   # Royal Blue
+        "secondary": "#F0F8FF", # Alice Blue
+        "accent": "#6B8CE8",    # Light Royal Blue (同色系提亮)
+        "muted": "#6495ED",     # Cornflower Blue
+        "background_gradient": "linear-gradient(to right, #e0f0ff 0%, #f0f8ff 100%)"
+    },
 }
+
+# Fixups for gradients to ensure text readability (mostly dark text on light bg)
+# Water
+PROFESSIONAL_PALETTES["water"]["background_gradient"] = "linear-gradient(to top, #accbee 0%, #e7f0fd 100%)"
+# Civil (Concrete)
+PROFESSIONAL_PALETTES["civil"]["background_gradient"] = "linear-gradient(to right, #ece9e6, #ffffff)"
+# Media (Clean modern)
+PROFESSIONAL_PALETTES["media"]["background_gradient"] = "linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)"
+# Sports (Less neon)
+PROFESSIONAL_PALETTES["sports"]["background_gradient"] = "linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)" # Cool activity
 
 
 def choose_style(req: TeachingRequest) -> StyleConfig:
@@ -230,6 +379,93 @@ def choose_style(req: TeachingRequest) -> StyleConfig:
     )
     return cfg
 
+
+def get_luminance(hex_color: str) -> float:
+    """Calculate relative luminance for WCAG contrast check."""
+    if not hex_color or not hex_color.startswith("#"):
+        return 0.5
+    try:
+        hex_color = hex_color.lstrip("#")
+        req_rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        rgb = [c / 255.0 for c in req_rgb]
+        srgb = [(c / 12.92) if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+        return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2]
+    except Exception:
+        return 0.5
+
+def check_contrast(text_color: str, bg_color: str) -> bool:
+    """Check if contrast ratio >= 3:1 (WCAG AA Large Text)."""
+    l1 = get_luminance(text_color)
+    l2 = get_luminance(bg_color)
+    ratio = (l1 + 0.05) / (l2 + 0.05) if l1 > l2 else (l2 + 0.05) / (l1 + 0.05)
+    return ratio >= 3.0
+
+async def refine_style_with_llm(
+    session_id: str,
+    current_config: StyleConfig,
+    feedback: str,
+    llm: LLMClient,
+    logger
+) -> Tuple[StyleConfig, List[str]]:
+    """Refine style based on user feedback using LLM."""
+    
+    # 1. Prepare Prompt
+    current_json = current_config.model_dump_json()
+    prompt = STYLE_REFINE_PROMPT.replace("Current Config", current_json).replace("User Feedback", feedback)
+    
+    # 2. Call LLM
+    try:
+        response = await llm.chat(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7 # Allow some creativity for "Generative Mode"
+        )
+        
+        # 3. Parse JSON Patch
+        # Remove potential markdown block
+        json_str = response.strip()
+        if json_str.startswith("```"):
+            json_str = json_str.split("\n", 1)[1].rsplit("\n", 1)[0]
+            
+        patch = json.loads(json_str)
+        
+        # 4. Merge Patch
+        # Deep merge helper or simple dict update? Pydantic can handle partial updates via copy+update
+        # But we need to handle nested dicts (color, font, etc.)
+        current_dict = current_config.model_dump()
+        
+        def deep_update(d, u):
+            for k, v in u.items():
+                if isinstance(v, dict) and k in d and isinstance(d[k], dict):
+                    deep_update(d[k], v)
+                else:
+                    d[k] = v
+        
+        deep_update(current_dict, patch)
+        
+        # 5. Validate & Rehydrate
+        new_config = StyleConfig(**current_dict)
+        
+        # 6. Safety Check (Contrast)
+        warnings = []
+        if new_config.color:
+            # Check Text vs Background
+            if not check_contrast(new_config.color.text, new_config.color.background):
+                warnings.append(f"文字与背景对比度过低 (Text: {new_config.color.text}, Bg: {new_config.color.background})")
+            
+            # Check Muted vs Background if strictly needed, or Primary vs Background
+            if not check_contrast(new_config.color.primary, new_config.color.background):
+                warnings.append("主色与背景对比度较低，可能影响标题识别")
+            
+            # Check Warning visibility
+            if not check_contrast(new_config.color.warning, new_config.color.background):
+                 warnings.append("警示色不明显")
+        
+        return new_config, warnings
+
+    except Exception as e:
+        logger.emit(session_id, "3.2", "refine_error", {"error": str(e)})
+        # Return original if failed
+        return current_config, [f"调整失败: {str(e)}"]
 
 def build_style_samples(req: TeachingRequest, cfg: StyleConfig) -> List[StyleSampleSlide]:
     kp_names = [kp.name for kp in req.knowledge_points]
