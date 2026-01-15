@@ -162,7 +162,7 @@ def _check_text_overflow(page: SlidePage, layout_id: str) -> List[str]:
 def _generate_css_variables(style_config: StyleConfig) -> str:
     """从 StyleConfig 生成 CSS Variables"""
     
-    colors = style_config.color_palette
+    colors = style_config.color
     
     css_vars = f"""
         --color-primary: {colors.primary};

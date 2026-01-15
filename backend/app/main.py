@@ -188,6 +188,68 @@ async def sync_style(req: StyleSyncRequest):
         return {"ok": False, "error": str(e)}
 
 
+@app.post("/api/workflow/render")
+def render_html_slides_api(req: dict):
+    """调用 3.5 模块渲染 HTML 幻灯片"""
+    try:
+        session_id = req.get("session_id")
+        if not session_id:
+            return {"ok": False, "error": "Missing session_id"}
+        
+        state = store.load(session_id)
+        if not state:
+            return {"ok": False, "error": "Session not found"}
+        
+        if not state.deck_content:
+            return {"ok": False, "error": "No deck_content found"}
+        
+        if not state.style_config:
+            return {"ok": False, "error": "No style_config found"}
+        
+        from .modules.render import render_html_slides
+        
+        output_dir = Path(DATA_DIR) / "outputs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        result = render_html_slides(
+            deck_content=state.deck_content,
+            style_config=state.style_config,
+            teaching_request=state.teaching_request,
+            session_id=session_id,
+            output_dir=str(output_dir),
+        )
+        
+        state.render_result = result
+        store.save(state)
+        
+        logger.emit(session_id, "3.5", "render_complete", {
+            "html_path": result.html_path,
+            "total_pages": result.total_pages,
+        })
+        
+        return {
+            "ok": True,
+            "html_path": result.html_path,
+            "total_pages": result.total_pages,
+            "image_slots": [
+                {
+                    "slot_id": slot.slot_id,
+                    "page_index": slot.page_index,
+                    "theme": slot.theme,
+                    "keywords": slot.keywords,
+                    "visual_style": slot.visual_style.value,
+                    "aspect_ratio": slot.aspect_ratio.value,
+                }
+                for slot in result.image_slots
+            ],
+            "layouts_used": result.layouts_used,
+            "warnings": result.warnings,
+        }
+    except Exception as e:
+        logger.emit(req.get("session_id", "unknown"), "3.5", "render_error", {"error": str(e)})
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/api/slide-types")
 def get_slide_types():
     """获取所有可用的slide_type定义"""
