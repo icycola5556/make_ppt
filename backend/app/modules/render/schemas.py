@@ -74,6 +74,7 @@ class ImageSlotRequest(BaseModel):
     
     # === 3.6 模块填充字段 ===
     matched_image_url: Optional[str] = Field(default=None, description="匹配到的图片URL")
+    html_source: Optional[str] = Field(default=None, description="生成的HTML中引用的本地图片路径")
     matched_score: Optional[float] = Field(default=None, description="匹配置信度")
     caption: Optional[str] = Field(default=None, description="图注")
     

@@ -178,158 +178,141 @@ STYLE_TEMPLATES = {
 }
 
 PROFESSIONAL_PALETTES = {
-    # 1. Engineering: Steel Blue family (Stability, Precision)
-    # 主色与强调色保持蓝色系协调
+    # 1. Engineering: Deep Blue & Industrial Grey (Precision, Reliability)
     "engineering": {
-        "primary": "#4A6FA5",   # Morandi Blue
-        "secondary": "#F0F4F8", # Cool Grey Surface
-        "accent": "#6B9BD1",    # Lighter Steel Blue (同色系提亮)
-        "muted": "#8898AA",     # Steel Grey
-        "background_gradient": "linear-gradient(135deg, #F5F7FA 0%, #C3CFE2 100%)"
+        "primary": "#0F4C81",     # Classic Blue (stronger, more confident)
+        "secondary": "#F3F7FA",   # Cool Grey Surface
+        "accent": "#00A8E8",      # Bright Cyan Blue (active elements)
+        "muted": "#8898AA",       # Steel Grey
+        "background_gradient": "linear-gradient(135deg, #FDFBFB 0%, #EBF4F5 100%)"
     },
-    # 2. Medical: Teal family (Healing, Calm)
-    # 青绿色系统一
+    # 2. Medical: Teal & Clean Cyan (Healing, Trust)
     "medical": {
-        "primary": "#5F9EA0",   # Cadet Blue / Sage
-        "secondary": "#F5FFFA", # Mint Cream
-        "accent": "#7EC8C8",    # Light Teal (同色系提亮)
-        "muted": "#9EB2B5",     # Greyish Teal
-        "background_gradient": "linear-gradient(to top, #e6e9f0 0%, #eef1f5 100%)" 
+        "primary": "#00838F",     # Deep Teal
+        "secondary": "#F0F9FA",   # Very pale cyan
+        "accent": "#26C6DA",      # Bright Cyan
+        "muted": "#90A4AE",       # Blue Grey
+        "background_gradient": "linear-gradient(to top, #E0F7FA 0%, #FFFFFF 100%)"
     },
-    # 3. Agriculture: Green family (Growth, Nature)
-    # 绿色系从深到浅
+    # 3. Agriculture: Nature Green & Earth (Growth, Sustainability)
     "agriculture": {
-        "primary": "#556B2F",   # Dark Olive Green
-        "secondary": "#FFFFF0", # Ivory
-        "accent": "#7BA05B",    # Moss Green (同色系提亮)
-        "muted": "#8FBC8F",     # Dark Sea Green
-        "background_gradient": "linear-gradient(120deg, #fdfbfb 0%, #ebedee 100%)"
+        "primary": "#2E7D32",     # Forest Green
+        "secondary": "#F1F8E9",   # Light Green Surface
+        "accent": "#8BC34A",      # Light Green
+        "muted": "#819CA9",       # Greyish Green
+        "background_gradient": "linear-gradient(120deg, #F1F8E9 0%, #FFFFFF 100%)"
     },
-    # 4. Arts: Rose/Mauve family (Creativity, Humanism)
-    # 玫瑰色系协调
+    # 4. Arts: Coral & Warm Nuances (Creativity, Expression)
     "arts": {
-        "primary": "#B06579",   # Dusty Rose
-        "secondary": "#FFF5F7", # Lavender Blush
-        "accent": "#D4899D",    # Light Rose (同色系提亮)
-        "muted": "#BC8F8F",     # Rosy Brown
-        "background_gradient": "linear-gradient(to top, #fad0c4 0%, #ffd1ff 100%)"
+        "primary": "#C2185B",     # Rose Red
+        "secondary": "#FCE4EC",   # Pink Tint
+        "accent": "#F06292",      # Soft Pink
+        "muted": "#BCAAA4",       # Warm Grey
+        "background_gradient": "linear-gradient(to top, #FFF0F5 0%, #FFFFFF 100%)"
     },
-    # 5. Business: Navy Blue family (Trust, Professionalism)
-    # 深蓝色系统一，不用金色
+    # 5. Business: Navy & Slate (Professionalism, Authority)
     "business": {
-        "primary": "#3E517A",   # Muted Navy
-        "secondary": "#F8F9FA", # Off White
-        "accent": "#6B82A8",    # Light Navy (同色系提亮)
-        "muted": "#708090",     # Slate Grey
-        "background_gradient": "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)"
+        "primary": "#1A202C",     # Dark Navy/Black
+        "secondary": "#EFF2F7",   # Light Grey Blue
+        "accent": "#3182CE",      # Corporate Blue
+        "muted": "#718096",       # Slate Grey
+        "background_gradient": "linear-gradient(135deg, #F7FAFC 0%, #E6EAF0 100%)"
     },
-    # 6. Science: Purple/Indigo family (Mystery, Depth)
-    # 紫色系从深到浅
+    # 6. Science: Indigo & Violet (Innovation, Future)
     "science": {
-        "primary": "#483D8B",   # Dark Slate Blue
-        "secondary": "#F5F5F5", # White Smoke
-        "accent": "#7B68EE",    # Medium Slate Blue (同色系提亮)
-        "muted": "#778899",     # Light Slate Grey
-        "background_gradient": "linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)"
+        "primary": "#4C1D95",     # Deep Violet
+        "secondary": "#F5F3FF",   # Pale Violet
+        "accent": "#8B5CF6",      # Bright Violet
+        "muted": "#8B95A5",       # Cool Grey
+        "background_gradient": "linear-gradient(to top, #F3E5F5 0%, #F5F7FA 100%)"
     },
-    # 7. Civil: Terracotta/Brown family (Structure, Grounded)
-    # 棕色暖色系
+    # 7. Civil: Architectural Brick & Concrete (Stability, Structure)
     "civil": {
-        "primary": "#A0522D",   # Sienna
-        "secondary": "#FAF0E6", # Linen
-        "accent": "#C4835A",    # Light Sienna (同色系提亮)
-        "muted": "#D2B48C",     # Tan
-        "background_gradient": "linear-gradient(to right, #ece9e6, #ffffff)"
+        "primary": "#8D4F2A",     # Brick Red/Brown
+        "secondary": "#FAF5F0",   # Warm White
+        "accent": "#D97706",      # Amber
+        "muted": "#A19994",       # Concrete Grey
+        "background_gradient": "linear-gradient(to right, #F5EFEB, #FFFFFF)"
     },
-    # 8. Transportation: Steel Blue family (Speed, Flow)
-    # 钢蓝色统一
+    # 8. Transportation: Dynamic Blue & Speed (Motion, Connectivity)
     "transportation": {
-        "primary": "#4682B4",   # Steel Blue
-        "secondary": "#F0F8FF", # Alice Blue
-        "accent": "#87CEEB",    # Sky Blue (同色系提亮)
-        "muted": "#A9A9A9",     # Dark Grey
-        "background_gradient": "linear-gradient(to top, #e6e9f0 0%, #eef1f5 100%)"
+        "primary": "#005691",     # Transportation Blue
+        "secondary": "#E1F5FE",   # Light Sky
+        "accent": "#039BE5",      # Bright Blue
+        "muted": "#78909C",       # Blue Grey
+        "background_gradient": "linear-gradient(to top, #E1F5FE 0%, #FFFFFF 100%)"
     },
-    # 9. Tourism: Coral/Salmon family (Warmth, Leisure)
-    # 暖橙色系
+    # 9. Tourism: Sunshine & Warmth (Experience, Joy)
     "tourism": {
-        "primary": "#E9967A",   # Dark Salmon
-        "secondary": "#FFFAF0", # Floral White
-        "accent": "#FFB299",    # Light Coral (同色系提亮)
-        "muted": "#D2B48C",     # Tan
-        "background_gradient": "linear-gradient(to top, #fff1eb 0%, #ffecd2 100%)"
+        "primary": "#E65100",     # Deep Orange
+        "secondary": "#FFF3E0",   # Pale Orange
+        "accent": "#FF9800",      # Vivid Orange
+        "muted": "#A1887F",       # Warm Grey
+        "background_gradient": "linear-gradient(to top, #FFF3E0 0%, #FFFFFF 100%)"
     },
-    # 10. Food: Warm Brown/Orange family (Appetizing, Natural)
-    # 暖棕橙色系
+    # 10. Food: appetizing Warmth (Fresh, Taste)
     "food": {
-        "primary": "#D2691E",   # Chocolate
-        "secondary": "#FFF8DC", # Cornsilk
-        "accent": "#E8A64C",    # Warm Orange (同色系提亮)
-        "muted": "#DEB887",     # Burlywood
-        "background_gradient": "linear-gradient(120deg, #ffecd2 0%, #fcb69f 100%)"
+        "primary": "#BF360C",     # Burnt Orange
+        "secondary": "#FFF8E1",   # Cream
+        "accent": "#FFB300",      # Golden Yellow
+        "muted": "#BCAAA4",       # Brownish Grey
+        "background_gradient": "linear-gradient(120deg, #FFF8E1 0%, #FFFFFF 100%)"
     },
-    # 11. Textile: Purple/Lavender family (Softness, Fabric)
-    # 紫色系统一
+    # 11. Textile: Elegant Purple & Fabric (Fashion, Texture)
     "textile": {
-        "primary": "#9F79EE",   # Muted Purple
-        "secondary": "#FFF0F5", # Lavender Blush
-        "accent": "#B8A0E8",    # Light Lavender (同色系提亮)
-        "muted": "#D8BFD8",     # Thistle
-        "background_gradient": "linear-gradient(to top, #e8e0f0 0%, #f8f0ff 100%)"
+        "primary": "#7B1FA2",     # Purple
+        "secondary": "#F3E5F5",   # Pale Purple
+        "accent": "#BA68C8",      # Light Purple
+        "muted": "#9E9E9E",       # Neutral Grey
+        "background_gradient": "linear-gradient(to top, #F3E5F5 0%, #FFFFFF 100%)"
     },
-    # 12. Resources: Slate Grey family (Earth, Solidity)
-    # 灰色系统一
+    # 12. Resources: Slate & Earth (Raw Material, Foundation)
     "resources": {
-        "primary": "#475569",   # Slate 600
-        "secondary": "#F1F5F9", # Slate 100
-        "accent": "#64748B",    # Slate 500 (同色系提亮)
-        "muted": "#CBD5E1",     # Slate 300
-        "background_gradient": "linear-gradient(135deg, #e0eaec 0%, #f0f7f9 100%)"
+        "primary": "#37474F",     # Charcoal
+        "secondary": "#ECEFF1",   # Light Blue Grey
+        "accent": "#546E7A",      # Slate Blue
+        "muted": "#B0BEC5",       # Light Slate
+        "background_gradient": "linear-gradient(135deg, #ECEFF1 0%, #FFFFFF 100%)"
     },
-    # 13. Water: Cyan/Teal family (Fluidity, Clarity)
-    # 青蓝色系
+    # 13. Water: Deep Ocean & Aqua (Flow, Cleanliness)
     "water": {
-        "primary": "#008B8B",   # Dark Cyan
-        "secondary": "#F0FFFF", # Azure
-        "accent": "#20B2AA",    # Light Sea Green (同色系提亮)
-        "muted": "#5F9EA0",     # Cadet Blue
-        "background_gradient": "linear-gradient(to top, #accbee 0%, #e7f0fd 100%)"
+        "primary": "#006064",     # Cyan Black
+        "secondary": "#E0F7FA",   # Pale Cyan
+        "accent": "#00BCD4",      # Bright Cyan
+        "muted": "#78909C",       # Blue Grey
+        "background_gradient": "linear-gradient(to top, #E0F7FA 0%, #FFFFFF 100%)"
     },
-    # 14. Media: Red family (Boldness, Attention)
-    # 红色系统一
+    # 14. Media: Vivid Red & Black (Focus, Impact)
     "media": {
-        "primary": "#B22222",   # Firebrick
-        "secondary": "#FFFAFA", # Snow
-        "accent": "#DC4545",    # Bright Red (同色系提亮)
-        "muted": "#808080",     # Grey
-        "background_gradient": "linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)"
+        "primary": "#B71C1C",     # Deep Red
+        "secondary": "#FFEBEE",   # Pale Red
+        "accent": "#F44336",      # Bright Red
+        "muted": "#757575",       # Neutral Grey
+        "background_gradient": "linear-gradient(135deg, #FFEBEE 0%, #FFFFFF 100%)"
     },
-    # 15. Public Security: Dark Grey/Blue family (Authority, Safety)
-    # 深灰蓝色系
+    # 15. Public Security: Police Blue & Badge (Authority, Order)
     "public-security": {
-        "primary": "#2F4F4F",   # Dark Slate Gray
-        "secondary": "#F5F5F5", # White Smoke
-        "accent": "#4F6F6F",    # Light Slate (同色系提亮)
-        "muted": "#A9A9A9",     # Dark Gray
-        "background_gradient": "linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)"
+        "primary": "#1A237E",     # Midnight Blue
+        "secondary": "#E8EAF6",   # Pale Indigo
+        "accent": "#304FFE",      # Bright Indigo
+        "muted": "#7986CB",       # Muted Indigo
+        "background_gradient": "linear-gradient(to top, #E8EAF6 0%, #FFFFFF 100%)"
     },
-    # 16. Public Service: Green family (Service, Approachable)
-    # 绿色系统一
+    # 16. Public Service: Gentle Green & Approachable (Community, Help)
     "public-service": {
-        "primary": "#2E8B57",   # Sea Green
-        "secondary": "#F0FFF0", # Honeydew
-        "accent": "#50C878",    # Emerald (同色系提亮)
-        "muted": "#8FBC8F",     # Dark Sea Green
-        "background_gradient": "linear-gradient(120deg, #e8f5e8 0%, #f0fff0 100%)"
+        "primary": "#00695C",     # Teal Green
+        "secondary": "#E0F2F1",   # Pale Teal
+        "accent": "#26A69A",      # Light Teal
+        "muted": "#80CBC4",       # Soft Teal
+        "background_gradient": "linear-gradient(120deg, #E0F2F1 0%, #FFFFFF 100%)"
     },
-    # 17. Sports: Blue family (Energy, Activity)
-    # 蓝色系统一，不用对比橙色
+    # 17. Sports: Active Blue & Energy (Competitive, Motion)
     "sports": {
-        "primary": "#4169E1",   # Royal Blue
-        "secondary": "#F0F8FF", # Alice Blue
-        "accent": "#6B8CE8",    # Light Royal Blue (同色系提亮)
-        "muted": "#6495ED",     # Cornflower Blue
-        "background_gradient": "linear-gradient(to right, #e0f0ff 0%, #f0f8ff 100%)"
+        "primary": "#0D47A1",     # Strong Blue
+        "secondary": "#E3F2FD",   # Light Blue
+        "accent": "#2196F3",      # Material Blue
+        "muted": "#90CAF9",       # Soft Blue
+        "background_gradient": "linear-gradient(to right, #E3F2FD 0%, #FFFFFF 100%)"
     },
 }
 

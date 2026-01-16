@@ -84,8 +84,9 @@ def render_html_slides(
     html_content = template.render(
         deck_title=deck_content.deck_title,
         slides=slides_data,
-        theme_name="professional",  # 默认主题
+        theme_name="professional",
         css_variables=css_variables,
+        poll_script=_generate_polling_script(session_id),
     )
     
     # 保存 HTML 文件
@@ -99,7 +100,7 @@ def render_html_slides(
         session_id=session_id,
         html_path=str(output_path),
         html_content=html_content,
-        image_slots=all_image_slots,
+        image_slots=all_image_slots, # 包含所有插槽信息，供后台任务处理
         metadata={
             "total_pages": len(deck_content.pages),
             "layouts_used": layouts_used,
@@ -108,6 +109,57 @@ def render_html_slides(
         total_pages=len(deck_content.pages),
         layouts_used=layouts_used,
     )
+
+
+def _generate_polling_script(session_id: str) -> str:
+    """生成用于轮询图片状态的JS脚本"""
+    return f"""
+    <script>
+        (function() {{
+            const sessionId = "{session_id}";
+            const POLL_INTERVAL = 2000;
+            
+            function checkImageStatus() {{
+                fetch(`/api/workflow/render/status/${{sessionId}}`)
+                    .then(response => response.json())
+                    .then(data => {{
+                        if (!data.ok) return;
+                        
+                        const images = data.images || {{}};
+                        let allDone = true;
+                        
+                        for (const [slotId, visualData] of Object.entries(images)) {{
+                            if (visualData.status === 'done' && visualData.url) {{
+                                // 查找对应插槽的容器
+                                const placeholder = document.querySelector(`.image-placeholder[data-slot-id="${{slotId}}"]`);
+                                
+                                if (placeholder && !placeholder.dataset.loaded) {{
+                                    // 替换为图片
+                                    placeholder.innerHTML = `<img src="${{visualData.url}}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
+                                    placeholder.dataset.loaded = "true";
+                                    placeholder.style.background = "none";
+                                    placeholder.style.border = "none";
+                                    placeholder.style.boxShadow = "none";
+                                }}
+                            }} else if (visualData.status === 'generating') {{
+                                // 可选: 显示加载状态 (如果尚未显示)
+                                allDone = false;
+                            }}
+                        }}
+                        
+                        if (!allDone) {{
+                            setTimeout(checkImageStatus, POLL_INTERVAL);
+                        }}
+                    }})
+                    .catch(e => console.error("Polling error:", e));
+            }}
+            
+            // 启动轮询
+            setTimeout(checkImageStatus, 1000);
+        }})();
+    </script>
+    """
+
 
 
 def _extract_bullets(page: SlidePage) -> List[str]:

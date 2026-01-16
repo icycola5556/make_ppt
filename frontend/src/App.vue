@@ -14,7 +14,7 @@
         :key="tab.id"
         :class="['tab', { active: currentTab === tab.id }]"
         :style="{ '--tab-color': tab.color }"
-        @click="currentTab = tab.id"
+        @click="navigateTo(tab.id)"
       >
         <span class="tab-badge">{{ tab.badge }}</span>
         {{ tab.label }}
@@ -23,34 +23,50 @@
 
     <!-- 模块内容 -->
     <main class="content">
-      <Module31Intent v-if="currentTab === '3.1'" />
-      <Module32Style v-else-if="currentTab === '3.2'" />
-      <Module33Outline v-else-if="currentTab === '3.3'" />
-      <Module34Content v-else-if="currentTab === '3.4'" />
-      <FullWorkflow v-else-if="currentTab === 'full'" />
+      <router-view v-slot="{ Component }">
+        <keep-alive>
+          <component :is="Component" />
+        </keep-alive>
+      </router-view>
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import Module31Intent from './views/Module31Intent.vue'
-import Module32Style from './views/Module32Style.vue'
-import Module33Outline from './views/Module33Outline.vue'
-import Module34Content from './views/Module34Content.vue'
+import { ref, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
-// Tab暂时用占位
-const FullWorkflow = { template: '<div class="placeholder">完整流程页面（保留原App.vue逻辑）</div>' }
+const router = useRouter()
+const route = useRoute()
 
 const tabs = [
   { id: '3.1', badge: '3.1', label: '意图理解', color: '#2563eb' },
   { id: '3.2', badge: '3.2', label: '风格设计', color: '#059669' },
   { id: '3.3', badge: '3.3', label: '大纲生成', color: '#7c3aed' },
   { id: '3.4', badge: '3.4', label: '内容生成', color: '#dc2626' },
-  { id: 'full', badge: '✓', label: '完整流程', color: '#111827' },
+  { id: '3.5', badge: '3.5', label: '智能排版', color: '#ea580c' },
+  // { id: 'full', badge: '✓', label: '完整流程', color: '#111827' },
 ]
 
-const currentTab = ref('3.1')
+const currentTab = computed(() => {
+  // Extract module number from path, e.g. /3.1 -> 3.1
+  const path = route.path
+  if (path === '/' || path === '/3.1') return '3.1'
+  if (path.includes('3.2')) return '3.2'
+  if (path.includes('3.3')) return '3.3'
+  if (path.includes('3.4')) return '3.4'
+  if (path.includes('3.5')) return '3.5'
+  return '3.1'
+})
+
+const navigateTo = (tabId) => {
+  if (tabId === 'full') {
+    // router.push('/full')
+    alert('完整流程暂未迁移')
+  } else {
+    router.push(`/${tabId}`)
+  }
+}
 </script>
 
 <style>

@@ -5,16 +5,324 @@
  * - 6 种核心布局的 CSS Grid 定义
  * - 文本溢出熔断机制 (Overflow Breaker)
  * - 导出友好约束 (Export-Friendly)
+ * - 响应式样式注入 (StyleConfig Integration)
  */
 
 /* ============================================================================
    全局设置
    ============================================================================ */
 
+/* ============================================================================
+   全局设置 & 布局基础
+   ============================================================================ */
+
 .reveal .slides section {
     text-align: left;
     padding: 3rem;
     box-sizing: border-box;
+    font-family: var(--font-body, "Microsoft YaHei", sans-serif);
+    color: var(--color-text, #2c3e50);
+    height: 100%;
+    /* 确保内容垂直分布 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* 底部装饰条 - 增加页面丰富度 */
+.reveal .slides section::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+    opacity: 0.8;
+}
+
+/* 通用标题样式 */
+.slide-title {
+    font-family: var(--font-title, "Microsoft YaHei", sans-serif);
+    color: var(--color-primary, #2c3e50);
+    line-height: 1.2;
+    margin-bottom: 0.8em;
+    /* 稍微增加间距 */
+    position: relative;
+    padding-bottom: 0.5rem;
+}
+
+/* 标题下划线装饰 (更精致) */
+.slide-title::after {
+    content: "";
+    display: block;
+    width: 60px;
+    height: 4px;
+    background: var(--color-accent, #3498db);
+    margin-top: 10px;
+    border-radius: 2px;
+}
+
+/* ============================================================================
+   布局 1: title_only (高度居中，视觉聚焦)
+   ============================================================================ */
+
+.layout-title-only {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: var(--color-background-gradient, transparent);
+}
+
+.layout-title-only .slide-title {
+    font-size: 5rem;
+    /* 更大的标题 */
+    font-weight: 800;
+    text-align: center;
+    color: var(--color-primary, #2c3e50);
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    margin-bottom: 0;
+}
+
+.layout-title-only .slide-title::after {
+    display: none;
+    /* 封面页不需要下划线 */
+}
+
+/* ============================================================================
+   布局 2: title_bullets (增加卡片感，让内容更饱满)
+   ============================================================================ */
+
+.layout-title-bullets {
+    display: grid;
+    grid-template-areas:
+        "title"
+        "bullets";
+    grid-template-rows: auto 1fr;
+    gap: 2rem;
+    height: 90%;
+}
+
+.layout-title-bullets .bullets-container {
+    background: var(--color-surface, #f8f9fa);
+    /* 使用更柔和的背景 */
+    padding: 3rem;
+    border-radius: var(--border-radius, 16px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    /* 更深邃的阴影 */
+    border-left: 8px solid var(--color-primary);
+
+    /* 垂直居中内容 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.layout-title-bullets .bullet-item {
+    font-size: 2.2rem;
+    /* 增大字号 */
+    line-height: 1.8;
+    margin-bottom: 1.5rem;
+    color: var(--color-text);
+}
+
+/* ============================================================================
+   布局 3: title_bullets_right_img (更好的利用垂直空间)
+   ============================================================================ */
+
+.layout-title-bullets-right-img {
+    display: grid;
+    grid-template-areas:
+        "title title"
+        "bullets image";
+    grid-template-columns: 1.1fr 0.9fr;
+    grid-template-rows: min-content 1fr;
+    gap: 2rem;
+    height: 90%;
+    align-items: start;
+    /* 顶部对齐,防止标题被挤压 */
+}
+
+.layout-title-bullets-right-img .content-bullets {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    /* 内容顶部对齐 */
+    background: var(--color-surface, #f8f9fa);
+    /* 使用 light surface 确保对比度 */
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    /* 轻微浮起 */
+}
+
+.layout-title-bullets-right-img .content-image {
+    width: 100%;
+    height: 100%;
+    max-height: 70vh;
+    /* 限制最大高度 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: white;
+    padding: 1rem;
+    border-radius: var(--border-radius, 12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    /* 图片更强的阴影 */
+}
+
+.layout-title-bullets-right-img .bullet-item {
+    font-size: 2rem;
+    line-height: 1.6;
+    margin-bottom: 1.8rem;
+}
+
+/* ============================================================================
+   布局 4: operation_steps (优化步骤球颜色)
+   ============================================================================ */
+
+.layout-operation-steps {
+    display: grid;
+    grid-template-areas:
+        "title title"
+        "image steps";
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 3rem;
+    height: 90%;
+    align-items: center;
+}
+
+.layout-operation-steps .content-steps {
+    background: var(--color-surface, #f8f9fa);
+    padding: 2.5rem;
+    border-radius: var(--border-radius, 12px);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.layout-operation-steps .step-item {
+    font-size: 1.8rem;
+    margin-bottom: 2rem;
+}
+
+.layout-operation-steps .step-item::before {
+    /* 确保步骤球内文字是白色的 */
+    color: white !important;
+    background: var(--color-primary, #2c3e50);
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.4rem;
+    line-height: 2.5rem;
+    /* 垂直居中 */
+    text-align: center;
+}
+
+/* ============================================================================
+   布局 5: concept_comparison (增强对比卡片)
+   ============================================================================ */
+
+.layout-concept-comparison {
+    display: grid;
+    grid-template-areas:
+        "title title"
+        "left right";
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 3rem;
+    height: 90%;
+}
+
+.layout-concept-comparison .slide-title {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.layout-concept-comparison .slide-title::after {
+    margin: 10px auto 0;
+    /* 居中下划线 */
+}
+
+.layout-concept-comparison .comparison-left,
+.layout-concept-comparison .comparison-right {
+    padding: 2rem;
+    border-radius: 16px;
+    background: white;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.06);
+    border-top: 6px solid var(--color-muted);
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* 内容居中 */
+}
+
+.layout-concept-comparison .comparison-left {
+    border-color: #27ae60;
+    /* 绿色代表正确/左侧 */
+}
+
+.layout-concept-comparison .comparison-right {
+    border-color: var(--color-warning, #c0392b);
+    /* 红色代表错误/右侧 */
+}
+
+.layout-concept-comparison .comparison-label {
+    width: 100%;
+    padding: 1rem;
+    font-size: 2rem;
+    color: white;
+    /* 确保文字白色 */
+    background: var(--color-primary);
+    text-align: center;
+    border-radius: 8px;
+    margin-top: auto;
+    /* 推到底部 */
+}
+
+/* ============================================================================
+   布局 6: grid_4 (图像卡片)
+   ============================================================================ */
+
+.layout-grid-4 {
+    display: grid;
+    grid-template-areas:
+        "title title"
+        "item1 item2"
+        "item3 item4";
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
+    gap: 2rem;
+    height: 90%;
+}
+
+.layout-grid-4 .grid-item {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.layout-grid-4 .grid-label {
+    font-size: 1.8rem;
+    margin-top: 1rem;
+    color: var(--color-primary);
+    font-weight: bold;
+}
+
+/* 全局图片优化 */
+img {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* ============================================================================
@@ -26,15 +334,20 @@
     align-items: center;
     justify-content: center;
     height: 100%;
+    /* 添加一点背景纹理或渐变支持 */
+    background: var(--color-background-gradient, transparent);
+    border-radius: var(--border-radius, 0px);
 }
 
 .layout-title-only .slide-title {
-    font-size: 4rem;
-    font-weight: 700;
+    font-size: 4.5rem;
+    font-weight: 800;
     text-align: center;
     color: var(--color-primary, #2c3e50);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    /* 微妙阴影 */
 
-    /* 文本溢出熔断 - 标题最多 2 行 */
+    /* 文本溢出熔断 */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -53,18 +366,19 @@
         "bullets bullets";
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto 1fr;
-    gap: 2rem;
+    gap: 3rem;
     height: 100%;
 }
 
 .layout-title-bullets .slide-title {
     grid-area: title;
     font-size: 3rem;
-    font-weight: 600;
-    color: var(--color-primary, #2c3e50);
+    font-weight: 700;
     margin: 0;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--color-muted, #ecf0f1);
+    /* 标题分割线 */
 
-    /* 文本溢出熔断 - 标题最多 2 行 */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -73,15 +387,21 @@
 
 .layout-title-bullets .bullets-container {
     grid-area: bullets;
+    background: var(--color-surface, #f8f9fa);
+    /* 强制使用亮色背景以确保文字可读性 */
+    padding: 2.5rem;
+    border-radius: var(--border-radius, 12px);
+    box-shadow: var(--box-shadow, 0 4px 6px rgba(0, 0, 0, 0.05));
+    /* 使用配置阴影 */
+    border-left: 5px solid var(--color-primary);
+    /* 增加视觉层次 */
 }
 
 .layout-title-bullets .bullet-list {
     list-style: none;
     padding: 0;
     margin: 0;
-
-    /* 文本溢出熔断 - 最多 10 个要点 */
-    max-height: calc(10 * 3.5rem);
+    max-height: calc(10 * 4rem);
     overflow: hidden;
 }
 
@@ -91,8 +411,8 @@
     margin-bottom: 1.5rem;
     padding-left: 2rem;
     position: relative;
+    color: var(--color-text, #2c3e50);
 
-    /* 文本溢出熔断 - 每个要点最多 3 行 */
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
@@ -104,7 +424,8 @@
     position: absolute;
     left: 0;
     color: var(--color-accent, #3498db);
-    font-size: 2rem;
+    font-size: 2.5rem;
+    line-height: 1.8rem;
 }
 
 /* ============================================================================
@@ -116,20 +437,21 @@
     grid-template-areas:
         "title title"
         "bullets image";
-    grid-template-columns: 3fr 2fr;
+    grid-template-columns: 1.2fr 1fr;
+    /* 调整比例，给文字更多空间 */
     grid-template-rows: auto 1fr;
-    gap: 2rem;
+    gap: 3rem;
     height: 100%;
 }
 
 .layout-title-bullets-right-img .slide-title {
     grid-area: title;
-    font-size: 2.8rem;
-    font-weight: 600;
-    color: var(--color-primary, #2c3e50);
+    font-size: 3rem;
+    font-weight: 700;
     margin: 0;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-muted, #e0e0e0);
 
-    /* 文本溢出熔断 */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -138,25 +460,35 @@
 
 .layout-title-bullets-right-img .content-bullets {
     grid-area: bullets;
+    padding-top: 1rem;
 }
 
 .layout-title-bullets-right-img .content-image {
     grid-area: image;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    /* 图片容器样式 */
+    background: var(--color-secondary, #f8f9fa);
+    border-radius: var(--border-radius, 12px);
+    overflow: hidden;
+    box-shadow: var(--box-shadow, 0 4px 6px rgba(0, 0, 0, 0.1));
 }
 
 .layout-title-bullets-right-img .bullet-list {
     list-style: none;
     padding: 0;
     margin: 0;
-    max-height: calc(8 * 3rem);
+    max-height: calc(8 * 3.5rem);
     overflow: hidden;
 }
 
 .layout-title-bullets-right-img .bullet-item {
-    font-size: 1.6rem;
+    font-size: 1.7rem;
     line-height: 1.5;
-    margin-bottom: 1.2rem;
-    padding-left: 1.8rem;
+    margin-bottom: 1.5rem;
+    padding-left: 2rem;
     position: relative;
 
     display: -webkit-box;
@@ -170,6 +502,8 @@
     position: absolute;
     left: 0;
     color: var(--color-accent, #3498db);
+    font-weight: bold;
+    font-size: 2rem;
 }
 
 /* ============================================================================
@@ -181,17 +515,16 @@
     grid-template-areas:
         "title title"
         "image steps";
-    grid-template-columns: 2fr 3fr;
+    grid-template-columns: 1fr 1fr;
     grid-template-rows: auto 1fr;
-    gap: 2rem;
+    gap: 3rem;
     height: 100%;
 }
 
 .layout-operation-steps .slide-title {
     grid-area: title;
-    font-size: 2.8rem;
-    font-weight: 600;
-    color: var(--color-primary, #2c3e50);
+    font-size: 3rem;
+    font-weight: 700;
     margin: 0;
 
     display: -webkit-box;
@@ -202,10 +535,20 @@
 
 .layout-operation-steps .content-image {
     grid-area: image;
+    /* 图片容器更明显 */
+    border: 2px solid var(--color-muted, #eee);
+    border-radius: var(--border-radius, 8px);
+    background: white;
+    box-shadow: var(--box-shadow, 0 4px 12px rgba(0, 0, 0, 0.1));
+    overflow: hidden;
 }
 
 .layout-operation-steps .content-steps {
     grid-area: steps;
+    background: var(--color-surface, #f8f9fa);
+    /* 使用 surface 色 */
+    padding: 2rem;
+    border-radius: var(--border-radius, 8px);
 }
 
 .layout-operation-steps .step-list {
@@ -213,15 +556,15 @@
     counter-reset: step-counter;
     padding: 0;
     margin: 0;
-    max-height: calc(6 * 4rem);
+    max-height: calc(6 * 5rem);
     overflow: hidden;
 }
 
 .layout-operation-steps .step-item {
     font-size: 1.6rem;
-    line-height: 1.5;
-    margin-bottom: 1.5rem;
-    padding-left: 3rem;
+    line-height: 1.4;
+    margin-bottom: 2rem;
+    padding-left: 3.5rem;
     position: relative;
     counter-increment: step-counter;
 
@@ -235,16 +578,19 @@
     content: counter(step-counter);
     position: absolute;
     left: 0;
-    width: 2rem;
-    height: 2rem;
-    background: var(--color-accent, #3498db);
+    top: -2px;
+    width: 2.2rem;
+    height: 2.2rem;
+    background: var(--color-primary, #2c3e50);
+    /* 步骤球使用主色 */
     color: white;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
-    font-size: 1.2rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================================================
@@ -258,16 +604,17 @@
         "left right";
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto 1fr;
-    gap: 2rem;
+    gap: 3rem;
     height: 100%;
 }
 
 .layout-concept-comparison .slide-title {
     grid-area: title;
-    font-size: 2.8rem;
-    font-weight: 600;
-    color: var(--color-primary, #2c3e50);
+    font-size: 3rem;
+    font-weight: 700;
     margin: 0;
+    text-align: center;
+    /* 对比页标题居中 */
 
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -275,28 +622,36 @@
     overflow: hidden;
 }
 
-.layout-concept-comparison .comparison-left {
-    grid-area: left;
+.layout-concept-comparison .comparison-left,
+.layout-concept-comparison .comparison-right {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.5rem;
+    padding: 2rem;
+    border-radius: var(--border-radius, 12px);
+    background: var(--color-surface, rgba(255, 255, 255, 0.5));
+    border: 1px solid var(--color-muted, #eee);
+}
+
+.layout-concept-comparison .comparison-left {
+    grid-area: left;
+    /* 可以在这里添加具体的左侧强调色，如 --color-success-bg */
 }
 
 .layout-concept-comparison .comparison-right {
     grid-area: right;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
 }
 
 .layout-concept-comparison .comparison-label {
-    font-size: 1.6rem;
-    font-weight: 500;
+    font-size: 1.8rem;
+    font-weight: 700;
     text-align: center;
     margin: 0;
     padding: 1rem;
-    background: var(--color-muted, #ecf0f1);
-    border-radius: 0.5rem;
+    background: var(--color-primary, #2c3e50);
+    color: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* ============================================================================
@@ -311,15 +666,14 @@
         "item3 item4";
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto 1fr 1fr;
-    gap: 1.5rem;
+    gap: 2rem;
     height: 100%;
 }
 
 .layout-grid-4 .slide-title {
     grid-area: title;
-    font-size: 2.8rem;
-    font-weight: 600;
-    color: var(--color-primary, #2c3e50);
+    font-size: 3rem;
+    font-weight: 700;
     margin: 0;
 
     display: -webkit-box;
@@ -328,33 +682,29 @@
     overflow: hidden;
 }
 
-.layout-grid-4 .grid-item-1 {
-    grid-area: item1;
-}
-
-.layout-grid-4 .grid-item-2 {
-    grid-area: item2;
-}
-
-.layout-grid-4 .grid-item-3 {
-    grid-area: item3;
-}
-
-.layout-grid-4 .grid-item-4 {
-    grid-area: item4;
-}
-
 .layout-grid-4 .grid-item {
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 1rem;
+    background: white;
+    padding: 1rem;
+    border-radius: var(--border-radius, 8px);
+    box-shadow: var(--box-shadow, 0 1px 3px rgba(0, 0, 0, 0.1));
+    border: 1px solid var(--color-muted, #eee);
+    transition: transform 0.2s;
+}
+
+.layout-grid-4 .grid-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .layout-grid-4 .grid-label {
-    font-size: 1.4rem;
-    font-weight: 500;
+    font-size: 1.5rem;
+    font-weight: 600;
     text-align: center;
     margin: 0;
+    color: var(--color-primary);
 
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -363,28 +713,16 @@
 }
 
 /* ============================================================================
-   导出友好约束 (Export-Friendly)
+   导出友好约束 & 工具类
    ============================================================================ */
 
-/* 禁止内容元素使用 position: absolute */
-.layout-title-only *,
-.layout-title-bullets *,
-.layout-title-bullets-right-img *,
-.layout-operation-steps *,
-.layout-concept-comparison *,
-.layout-grid-4 * {
-    /* 使用 relative 或 static */
-    position: relative;
-}
-
-/* 仅使用简单 transform */
 .reveal .slides section {
-    /* 避免 3D transforms */
     transform-style: flat;
 }
 
-/* 所有颜色使用 CSS Variables */
-/* 已在各布局中实现 */
-
-/* 避免复杂 calc() 嵌套 */
-/* 已避免,使用简单的 calc() */
+img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 4px;
+    /* 图片默认圆角 */
+}

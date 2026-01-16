@@ -1,4 +1,4 @@
-const DEFAULT_BASE = 'http://localhost:8000'
+const DEFAULT_BASE = 'http://127.0.0.1:8000'
 
 let currentBase = localStorage.getItem('api_base') || (import.meta.env.VITE_API_BASE || DEFAULT_BASE)
 
@@ -41,10 +41,16 @@ export const api = {
       body: { session_id, user_text: userText, answers, auto_fill_defaults, stop_at, style_name }
     })
   },
+  renderMock() {
+    return http('/api/workflow/render-mock', { method: 'POST' })
+  },
   getSession(session_id) { return http(`/api/session/${session_id}`) },
   getSlideTypes() { return http('/api/slide-types') },
-  logsUrl(session_id) { 
+  logsUrl(session_id) {
     const base = getApiBase().replace(/\/$/, '')
     return `${base}/api/logs/${session_id}`
+  },
+  getRenderStatus(session_id) {
+    return http(`/api/workflow/render/status/${session_id}`)
   }
 }

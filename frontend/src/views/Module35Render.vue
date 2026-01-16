@@ -18,6 +18,16 @@
           <strong>警告:</strong> {{ renderResult.warnings.length }}
         </span>
       </div>
+      
+      <div v-if="imageProgress" class="progress-status">
+        <span v-if="imageProgress.done < imageProgress.total">
+           🔄 正在生图: {{ imageProgress.done }} / {{ imageProgress.total }}
+           (生成中: {{ imageProgress.generating }})
+        </span>
+        <span v-else class="success-text">
+           ✅ 所有图片生成完毕 ({{ imageProgress.total }} 张)
+        </span>
+      </div>
     </div>
 
     <!-- 警告信息 -->
@@ -71,7 +81,7 @@
 
     <!-- HTML 预览 -->
     <div v-if="htmlPath" class="html-preview">
-      <h3>📄 HTML 输出</h3>
+      <h3>📄 渲染结果预览 (HTML Output)</h3>
       <div class="preview-actions">
         <a :href="`http://127.0.0.1:8000/data/outputs/${htmlPath.split('/').pop()}`" 
            target="_blank" 
@@ -80,6 +90,16 @@
         </a>
         <button @click="copyPath" class="btn-secondary">复制路径</button>
       </div>
+      
+      <!-- 嵌入预览窗口 -->
+      <div class="iframe-container">
+        <iframe 
+          :src="`http://127.0.0.1:8000/data/outputs/${htmlPath.split('/').pop()}`"
+          class="slide-preview-frame"
+          title="Slide Preview">
+        </iframe>
+      </div>
+      
       <div class="path-display">
         <code>{{ htmlPath }}</code>
       </div>
@@ -95,53 +115,62 @@
 
 <script>
 import { ref } from 'vue'
-import api from '../api'
+import { api } from '../api'
 
 export default {
   name: 'Module35Render',
   setup() {
-    const loading = ref(false)
-    const renderResult = ref(null)
-    const htmlPath = ref(null)
-    const error = ref(null)
+    const imageProgress = ref(null)
+    let pollTimer = null
+
+    const startPolling = (sessionId) => {
+      if (pollTimer) clearInterval(pollTimer)
+      
+      pollTimer = setInterval(async () => {
+        try {
+          const res = await api.getRenderStatus(sessionId)
+          if (res.ok && res.images) {
+            const images = res.images
+            const total = Object.keys(images).length
+            const done = Object.values(images).filter(i => i.status === 'done').length
+            const generating = Object.values(images).filter(i => i.status === 'generating').length
+            
+            imageProgress.value = { total, done, generating }
+            
+            if (done === total && total > 0) {
+              clearInterval(pollTimer)
+            }
+          }
+        } catch (e) {
+          console.error("Poll error", e)
+        }
+      }, 2000)
+    }
 
     const testRender = async () => {
       loading.value = true
       error.value = null
       renderResult.value = null
       htmlPath.value = null
+      imageProgress.value = null
+      if (pollTimer) clearInterval(pollTimer)
 
       try {
-        // 创建测试 session
-        const sessionRes = await api.post('/api/session')
-        const sessionId = sessionRes.data.session_id
+        // 直接调用 mock API,不依赖 3.4 模块
+        const renderRes = await api.renderMock()
 
-        // 运行完整工作流到 3.4
-        const workflowRes = await api.post('/api/workflow/run', {
-          session_id: sessionId,
-          user_text: '液压系统工作原理',
-          answers: {
-            professional_category: '机械制造',
-            teaching_scenario: 'practice',
-            slide_count: 7,
-          },
-          auto_fill_defaults: true,
-          stop_at: '3.4',
-        })
-
-        if (workflowRes.data.status === 'ok' && workflowRes.data.deck_content) {
-          // 调用 3.5 渲染 API (需要在后端添加)
-          const renderRes = await api.post('/api/workflow/render', {
-            session_id: sessionId,
-          })
-
-          renderResult.value = renderRes.data
-          htmlPath.value = renderRes.data.html_path
+        if (renderRes.ok) {
+          renderResult.value = renderRes
+          htmlPath.value = renderRes.html_path
+          
+          if (renderRes.sesson_id) {
+             startPolling(renderRes.sesson_id)
+          }
         } else {
-          error.value = '工作流未完成到 3.4 阶段'
+          error.value = renderRes.error || '渲染失败'
         }
       } catch (err) {
-        error.value = err.response?.data?.detail || err.message
+        error.value = err.response?.data?.error || err.message
       } finally {
         loading.value = false
       }
@@ -157,6 +186,7 @@ export default {
       renderResult,
       htmlPath,
       error,
+      imageProgress,
       testRender,
       copyPath,
     }
@@ -232,6 +262,23 @@ export default {
 
 .stat-item {
   font-size: 0.95rem;
+}
+
+.progress-status {
+  margin-left: 2rem;
+  padding: 0.5rem 1rem;
+  background: #e8f5e9;
+  border-radius: 4px;
+  color: #2e7d32;
+  font-weight: 500;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.success-text {
+  color: #2e7d32;
 }
 
 .warnings-panel {
@@ -419,5 +466,26 @@ export default {
   color: #721c24;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+.iframe-container {
+  margin-bottom: 1rem;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f1f3f5;
+  /* 16:9 Aspect Ratio Container */
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 Aspect Ratio */
+}
+
+.slide-preview-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
 }
 </style>
