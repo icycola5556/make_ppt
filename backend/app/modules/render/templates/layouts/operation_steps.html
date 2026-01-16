@@ -1,0 +1,22 @@
+<div class="layout-operation-steps">
+    <h2 class="slide-title">{{ slide.title }}</h2>
+    <div class="content-image">
+        {% if slide.image_slots and slide.image_slots|length > 0 %}
+        {% set slot = slide.image_slots[0] %}
+        <div class="image-placeholder" data-slot-id="{{ slot.slot_id }}">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">{{ slot.theme }}</p>
+                <span class="placeholder-tags">{{ slot.keywords|join(', ') }}</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="content-steps">
+        <ol class="step-list">
+            {% for bullet in slide.bullets %}
+            <li class="step-item">{{ bullet }}</li>
+            {% endfor %}
+        </ol>
+    </div>
+</div>

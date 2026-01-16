@@ -1,7 +1,25 @@
-# modules/render - 3.5 渲染为网页幻灯片模块
-# 负责将SlideDeckContent渲染为HTML/reveal.js
+"""
+Module 3.5: 智能排版与动态渲染引擎
+"""
 
-# TODO: 待实现
-# from .html_generator import render_to_html
+from .schemas import (
+    ImageSlotRequest,
+    RenderResult,
+    LayoutConfig,
+    ImageStyle,
+    AspectRatio,
+    ColorConstraint,
+)
+from .html_renderer import render_html_slides
+from .layout_configs import VOCATIONAL_LAYOUTS
 
-__all__ = []
+__all__ = [
+    "ImageSlotRequest",
+    "RenderResult",
+    "LayoutConfig",
+    "ImageStyle",
+    "AspectRatio",
+    "ColorConstraint",
+    "render_html_slides",
+    "VOCATIONAL_LAYOUTS",
+]

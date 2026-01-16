@@ -1,0 +1,53 @@
+/**
+ * 字体配置 - 使用系统字体栈,无需下载
+ * 
+ * 优先使用系统自带的中文字体,确保快速加载和良好兼容性
+ */
+
+:root {
+  /* 中文字体栈 - 优先使用系统字体 */
+  --font-family-chinese: 
+    "PingFang SC",           /* macOS 苹方 */
+    "Microsoft YaHei",       /* Windows 微软雅黑 */
+    "Noto Sans CJK SC",      /* Linux */
+    "Source Han Sans CN",    /* 思源黑体 */
+    "Hiragino Sans GB",      /* macOS 旧版 */
+    sans-serif;
+  
+  /* 英文字体栈 */
+  --font-family-english:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  
+  /* 等宽字体 (代码) */
+  --font-family-mono:
+    "SF Mono",
+    "Monaco",
+    "Consolas",
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+}
+
+/* 全局字体应用 */
+body {
+  font-family: var(--font-family-chinese), var(--font-family-english);
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* 标题字体 */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-family-chinese), var(--font-family-english);
+  font-weight: 600;
+}
+
+/* 代码字体 */
+code, pre {
+  font-family: var(--font-family-mono);
+}

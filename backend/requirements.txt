@@ -16,3 +16,9 @@ duckduckgo-search>=7.0.0
 
 # 可选: PPT文件分析工具 (scripts/analyze_ppt.py)
 # python-pptx>=0.6.23
+
+# 文本处理
+jieba>=0.42.1
+
+# 阿里云百炼 SDK
+dashscope>=1.14.0
