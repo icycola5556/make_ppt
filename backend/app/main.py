@@ -106,6 +106,16 @@ async def run_workflow(req: WorkflowRunRequest):
             message="需要补充信息后才能继续。",
         )
 
+    # 根据stage生成合适的消息
+    if stage == "3.2":
+        message = "已生成到模块3.2：风格配置。可以继续生成大纲。"
+    elif stage == "3.3":
+        message = "已生成到模块3.3：PPT大纲。"
+    elif stage == "3.4":
+        message = "已生成到模块3.4：页面内容。"
+    else:
+        message = "已生成到模块3.1：意图理解。"
+    
     return WorkflowRunResponse(
         session_id=req.session_id,
         status="ok",
@@ -116,7 +126,7 @@ async def run_workflow(req: WorkflowRunRequest):
         outline=state.outline,
         deck_content=state.deck_content,
         logs_preview=logger.preview(req.session_id),
-        message="已生成到模块3.4：页面内容。" if stage == "3.4" else "已生成到模块3.3：PPT大纲。",
+        message=message,
     )
 
 
@@ -143,17 +153,19 @@ class StyleRefineResponse(BaseModel):
     style_config: Optional[StyleConfig]
     style_samples: List[StyleSampleSlide]
     warnings: List[str]
+    reasoning: Optional[str] = None  # 大模型的选择理由或设计思路
     error: Optional[str] = None
 
 @app.post("/api/workflow/style/refine", response_model=StyleRefineResponse)
 async def refine_style(req: StyleRefineRequest):
     try:
-        cfg, samples, warnings = await engine.refine_style(req.session_id, req.feedback)
+        cfg, samples, warnings, reasoning = await engine.refine_style(req.session_id, req.feedback)
         return StyleRefineResponse(
             ok=True,
             style_config=cfg,
             style_samples=samples,
-            warnings=warnings
+            warnings=warnings,
+            reasoning=reasoning
         )
     except Exception as e:
         logger.emit(req.session_id, "3.2", "refine_api_error", {"error": str(e)})
@@ -162,6 +174,7 @@ async def refine_style(req: StyleRefineRequest):
             style_config=None,
             style_samples=[],
             warnings=[],
+            reasoning=None,
             error=str(e)
         )
 

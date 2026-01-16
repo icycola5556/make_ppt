@@ -13,8 +13,9 @@ from ...common.schemas import (
     TeachingRequest,
 )
 from ...common import LLMClient
-from ...prompts.style import STYLE_REFINE_PROMPT
+from ...prompts.style import STYLE_REFINE_PROMPT, STYLE_SELECT_OR_DESIGN_PROMPT
 import json
+from typing import Optional
 
 # ... (STYLE_TEMPLATES omitted for brevity, assuming replace_file_content handles boundaries correctly. 
 # Wait, I need to touch imports at top and choose_style at bottom.
@@ -405,10 +406,34 @@ async def refine_style_with_llm(
     current_config: StyleConfig,
     feedback: str,
     llm: LLMClient,
-    logger
-) -> Tuple[StyleConfig, List[str]]:
-    """Refine style based on user feedback using LLM."""
+    logger,
+    teaching_request: Optional[TeachingRequest] = None,
+    previous_modifications: Optional[List[Dict[str, Any]]] = None
+) -> Tuple[StyleConfig, List[str], str]:
+    """Refine style based on user feedback using LLM.
     
+    Returns:
+        (StyleConfig, List[str], str): (new_config, warnings, reasoning)
+    """
+    
+    # 判断是否需要综合分析（用户要求"换风格"）
+    feedback_lower = feedback.lower()
+    style_change_keywords = ["换一个风格", "换个风格", "换风格", "改成", "改为", "切换", "改变风格", "换种风格", "重新设计", "换个样式"]
+    needs_comprehensive_analysis = any(keyword in feedback_lower for keyword in style_change_keywords)
+    
+    # 如果需要综合分析且有 teaching_request，使用综合分析 prompt
+    if needs_comprehensive_analysis and teaching_request:
+        return await _refine_style_with_comprehensive_analysis(
+            session_id=session_id,
+            current_config=current_config,
+            feedback=feedback,
+            teaching_request=teaching_request,
+            previous_modifications=previous_modifications or [],
+            llm=llm,
+            logger=logger
+        )
+    
+    # 否则使用原有的微调 prompt
     # 1. Prepare Prompt
     current_json = current_config.model_dump_json()
     prompt = STYLE_REFINE_PROMPT.replace("Current Config", current_json).replace("User Feedback", feedback)
@@ -445,7 +470,56 @@ async def refine_style_with_llm(
         # 5. Validate & Rehydrate
         new_config = StyleConfig(**current_dict)
         
-        # 6. Safety Check (Contrast)
+        # 6. Post-process: 如果用户明确要求"换风格"但LLM没有修改style_name，进行智能推断
+        feedback_lower = feedback.lower()
+        style_change_keywords = ["换一个风格", "换个风格", "换风格", "改成", "改为", "切换", "改变风格", "换种风格"]
+        needs_style_change = any(keyword in feedback_lower for keyword in style_change_keywords)
+        
+        if needs_style_change and new_config.style_name == current_config.style_name:
+            # LLM 没有修改 style_name，但用户明确要求换风格，进行智能推断
+            # 根据修改后的颜色特征推断最匹配的 style_name
+            primary_color = new_config.color.primary if new_config.color else None
+            
+            # 简单的颜色匹配逻辑（基于主色调）
+            if primary_color:
+                # 蓝色系 -> theory_clean
+                if any(blue in primary_color.lower() for blue in ["3d5a80", "4a6fa5", "5b8db8", "6b9bc3"]):
+                    new_config.style_name = "theory_clean"
+                    logger.emit(session_id, "3.2", "style_name_auto_inferred", {
+                        "reason": "color_based_inference",
+                        "new_style_name": "theory_clean",
+                        "primary_color": primary_color
+                    })
+                # 绿色系 -> practice_steps
+                elif any(green in primary_color.lower() for green in ["2d6a4f", "4a7c59", "52b788", "6b9e78"]):
+                    new_config.style_name = "practice_steps"
+                    logger.emit(session_id, "3.2", "style_name_auto_inferred", {
+                        "reason": "color_based_inference",
+                        "new_style_name": "practice_steps",
+                        "primary_color": primary_color
+                    })
+                # 紫色系 -> review_mindmap
+                elif any(purple in primary_color.lower() for purple in ["5c4b7d", "6b5b8e", "7e6ba8", "8b7dae"]):
+                    new_config.style_name = "review_mindmap"
+                    logger.emit(session_id, "3.2", "style_name_auto_inferred", {
+                        "reason": "color_based_inference",
+                        "new_style_name": "review_mindmap",
+                        "primary_color": primary_color
+                    })
+                # 暖色系 -> 根据场景判断，默认 theory_clean
+                elif any(warm in primary_color.lower() for warm in ["b85c38", "c4726c", "d4845a", "d99e76"]):
+                    # 暖色通常用于理论课，保持 theory_clean 或根据 layout 判断
+                    if new_config.layout and getattr(new_config.layout, "steps_panel", False):
+                        new_config.style_name = "practice_steps"
+                    else:
+                        new_config.style_name = "theory_clean"
+                    logger.emit(session_id, "3.2", "style_name_auto_inferred", {
+                        "reason": "color_and_layout_inference",
+                        "new_style_name": new_config.style_name,
+                        "primary_color": primary_color
+                    })
+        
+        # 7. Safety Check (Contrast)
         warnings = []
         if new_config.color:
             # Check Text vs Background
@@ -460,12 +534,111 @@ async def refine_style_with_llm(
             if not check_contrast(new_config.color.warning, new_config.color.background):
                  warnings.append("警示色不明显")
         
-        return new_config, warnings
+        # 8. Log style_name change for debugging
+        if new_config.style_name != current_config.style_name:
+            logger.emit(session_id, "3.2", "style_name_updated", {
+                "old_style_name": current_config.style_name,
+                "new_style_name": new_config.style_name,
+                "user_feedback": feedback
+            })
+        
+        # 9. Generate simple reasoning for micro-adjustments
+        reasoning = f"根据您的反馈「{feedback}」，对当前风格进行了微调。"
+        if new_config.style_name != current_config.style_name:
+            reasoning += f"风格标识已更新为 {new_config.style_name}。"
+        
+        return new_config, warnings, reasoning
 
     except Exception as e:
         logger.emit(session_id, "3.2", "refine_error", {"error": str(e)})
         # Return original if failed
-        return current_config, [f"调整失败: {str(e)}"]
+        return current_config, [f"调整失败: {str(e)}"], f"风格调整失败: {str(e)}"
+
+
+async def _refine_style_with_comprehensive_analysis(
+    session_id: str,
+    current_config: StyleConfig,
+    feedback: str,
+    teaching_request: TeachingRequest,
+    previous_modifications: List[Dict[str, Any]],
+    llm: LLMClient,
+    logger
+) -> Tuple[StyleConfig, List[str], str]:
+    """综合分析教学需求和用户反馈，选择模板或自主设计风格。
+    
+    Returns:
+        (StyleConfig, List[str], str): (new_config, warnings, reasoning)
+    """
+    try:
+        # 1. Prepare comprehensive prompt
+        teaching_request_json = teaching_request.model_dump_json()
+        current_config_json = current_config.model_dump_json()
+        previous_mods_json = json.dumps(previous_modifications, ensure_ascii=False) if previous_modifications else "[]"
+        
+        prompt = STYLE_SELECT_OR_DESIGN_PROMPT.replace("{Teaching Request}", teaching_request_json) \
+                                              .replace("{Current Style Config}", current_config_json) \
+                                              .replace("{User Feedback}", feedback) \
+                                              .replace("{Previous Modifications}", previous_mods_json)
+        
+        # 2. Call LLM
+        response = await llm.chat(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7
+        )
+        
+        # 3. Parse response
+        json_str = response.strip()
+        if json_str.startswith("```"):
+            json_str = json_str.split("\n", 1)[1].rsplit("\n", 1)[0]
+        
+        result = json.loads(json_str)
+        
+        # 4. Extract results
+        decision = result.get("decision", "select_template")
+        selected_template = result.get("selected_template")
+        style_config_dict = result.get("style_config", {})
+        reasoning = result.get("reasoning", "未提供理由")
+        
+        # 5. If selected template, merge with template base (allow customization)
+        if decision == "select_template" and selected_template and selected_template in STYLE_TEMPLATES:
+            template_base = STYLE_TEMPLATES[selected_template].copy()
+            # Merge user's customizations from style_config_dict
+            def deep_merge(base, custom):
+                for k, v in custom.items():
+                    if isinstance(v, dict) and k in base and isinstance(base[k], dict):
+                        deep_merge(base[k], v)
+                    else:
+                        base[k] = v
+            deep_merge(template_base, style_config_dict)
+            style_config_dict = template_base
+        
+        # 6. Validate & Create StyleConfig
+        new_config = StyleConfig(**style_config_dict)
+        
+        # 7. Safety Check (Contrast)
+        warnings = []
+        if new_config.color:
+            if not check_contrast(new_config.color.text, new_config.color.background):
+                warnings.append(f"文字与背景对比度过低 (Text: {new_config.color.text}, Bg: {new_config.color.background})")
+            if not check_contrast(new_config.color.primary, new_config.color.background):
+                warnings.append("主色与背景对比度较低，可能影响标题识别")
+            if not check_contrast(new_config.color.warning, new_config.color.background):
+                warnings.append("警示色不明显")
+        
+        # 8. Log the decision
+        logger.emit(session_id, "3.2", "style_comprehensive_analysis", {
+            "decision": decision,
+            "selected_template": selected_template,
+            "new_style_name": new_config.style_name,
+            "reasoning": reasoning
+        })
+        
+        return new_config, warnings, reasoning
+        
+    except Exception as e:
+        logger.emit(session_id, "3.2", "comprehensive_analysis_error", {"error": str(e)})
+        # Fallback: return original with error message
+        return current_config, [f"综合分析失败: {str(e)}"], f"风格综合分析失败: {str(e)}"
 
 def build_style_samples(req: TeachingRequest, cfg: StyleConfig) -> List[StyleSampleSlide]:
     kp_names = [kp.name for kp in req.knowledge_points]

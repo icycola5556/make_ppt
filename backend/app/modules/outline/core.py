@@ -588,6 +588,14 @@ async def _refine_slide_types(
         
         logger.emit(session_id, "3.3", "slide_type_refinement_response", meta)
         
+        # LLM可能返回包装在"outline"键中的数据，需要解包
+        if isinstance(parsed, dict) and "outline" in parsed and len(parsed) == 1:
+            # 如果返回的是 {"outline": {...}}，提取outline内容
+            parsed = parsed["outline"]
+        elif isinstance(parsed, dict) and "outline" in parsed:
+            # 如果返回的是 {"outline": {...}, "instruction": "..."}，提取outline内容
+            parsed = parsed["outline"]
+        
         # 验证并返回结果
         refined_outline = PPTOutline.model_validate(parsed)
         

@@ -866,11 +866,22 @@ class WorkflowEngine:
         skip_3_2 = style_name is not None
         
         if not skip_3_2 and state.style_config is None:
+            # 完整流程模式：执行3.2风格设计模块
+            self.logger.emit(session_id, "3.2", "start", {"mode": "full_workflow"})
             cfg, samples = await self._design_style(session_id, state.teaching_request)
             state.style_config = cfg
             state.style_samples = samples
             state.stage = "3.2"
             self.store.save(state)
+            self.logger.emit(session_id, "3.2", "complete", {
+                "style_name": cfg.style_name,
+                "mode": "full_workflow"
+            })
+            
+            # 完整流程模式：如果stop_at='3.3'，3.2完成后先返回，让前端展示3.2的结果
+            # 这样用户可以查看风格配置，然后再继续到3.3
+            if stop_at == "3.3" and state.outline is None:
+                return state, "ok", []
 
         # Check if we should stop at 3.2
         if stop_at == "3.2":
@@ -878,15 +889,36 @@ class WorkflowEngine:
 
         # --- Stage 3.3 ---
         if state.outline is None:
-            # If style_name is provided, use it directly; otherwise use style_config
+            # 完整流程模式：使用3.2生成的style_config
+            # 跳过3.2模式：直接使用传入的style_name
             if skip_3_2:
-                # For test mode 3.1->3.3, create a minimal StyleConfig or pass style_name directly
+                # 测试模式 3.1->3.3：跳过3.2，直接使用style_name
+                self.logger.emit(session_id, "3.3", "start", {
+                    "mode": "skip_3_2",
+                    "style_name": style_name
+                })
                 outline = await self._generate_outline(session_id, state.teaching_request, style_name=style_name)
             else:
+                # 完整流程模式 3.1->3.2->3.3：使用3.2生成的style_config
+                if state.style_config is None:
+                    # 理论上不应该发生，但如果发生则记录警告并使用降级逻辑
+                    self.logger.emit(session_id, "3.3", "warning", {
+                        "message": "style_config is None in full workflow, falling back to teaching_scene inference",
+                        "mode": "full_workflow"
+                    })
+                else:
+                    self.logger.emit(session_id, "3.3", "start", {
+                        "mode": "full_workflow",
+                        "style_name": state.style_config.style_name,
+                        "style_config_available": True
+                    })
                 outline = await self._generate_outline(session_id, state.teaching_request, style_config=state.style_config)
             state.outline = outline
             state.stage = "3.3"
             self.store.save(state)
+            self.logger.emit(session_id, "3.3", "complete", {
+                "slide_count": len(outline.slides) if outline.slides else 0
+            })
 
         # Check if we should stop at 3.3
         if stop_at == "3.3":
@@ -908,29 +940,36 @@ class WorkflowEngine:
 
         return state, "ok", []
 
-    async def refine_style(self, session_id: str, feedback: str) -> Tuple[Optional[StyleConfig], List[StyleSampleSlide], List[str]]:
+    async def refine_style(self, session_id: str, feedback: str) -> Tuple[Optional[StyleConfig], List[StyleSampleSlide], List[str], str]:
         """
         Human-in-the-loop: Refine style configuration based on user feedback.
-        Returns: (NewConfig, NewSamples, Warnings)
+        Returns: (NewConfig, NewSamples, Warnings, Reasoning)
         """
         state = self.store.load(session_id)
         if not state or not state.style_config:
-            return None, [], ["Session or style config not found"]
+            return None, [], ["Session or style config not found"], ""
 
         try:
-            # 1. Refine Config
-            new_config, warnings = await refine_style_with_llm(
+            # 1. Get modification history (if any)
+            # We'll track this in a simple way by checking logs or storing in a dict
+            modification_history = []
+            # For now, we'll pass empty list - can be enhanced later to track from logs
+            
+            # 2. Refine Config (with comprehensive analysis if needed)
+            new_config, warnings, reasoning = await refine_style_with_llm(
                 session_id=session_id,
                 current_config=state.style_config,
                 feedback=feedback,
                 llm=self.llm,
-                logger=self.logger
+                logger=self.logger,
+                teaching_request=state.teaching_request,
+                previous_modifications=modification_history
             )
 
-            # 2. Regenerate Samples
+            # 3. Regenerate Samples
             new_samples = build_style_samples(state.teaching_request, new_config)
 
-            # 3. Update State
+            # 4. Update State
             state.style_config = new_config
             state.style_samples = new_samples
             
@@ -938,11 +977,12 @@ class WorkflowEngine:
             self.logger.emit(session_id, "3.2", "style_refined", {
                 "feedback": feedback, 
                 "warnings": warnings,
-                "diff_summary": "TODO"
+                "reasoning": reasoning,
+                "new_style_name": new_config.style_name
             })
             
             self.store.save(state)
-            return new_config, new_samples, warnings
+            return new_config, new_samples, warnings, reasoning
             
         except Exception as e:
             self.logger.emit(session_id, "3.2", "refine_engine_error", {"error": str(e)})
