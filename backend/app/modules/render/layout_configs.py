@@ -196,6 +196,37 @@ def get_layout(layout_id: str) -> LayoutConfig:
     return VOCATIONAL_LAYOUTS.get(layout_id)
 
 
+
 def get_all_layouts() -> dict[str, LayoutConfig]:
     """获取所有布局配置"""
     return VOCATIONAL_LAYOUTS
+
+
+def get_layout_schema_for_llm() -> list[dict]:
+    """
+    Export simplified layout registry for LLM Layout Decision Agent.
+    
+    Returns:
+        List of simplified layout definitions
+    """
+    schemas = []
+    
+    for layout_id, config in VOCATIONAL_LAYOUTS.items():
+        # Count image slots
+        img_count = len(config.image_slots)
+        
+        # Prepare schema
+        schema = {
+            "layout_id": layout_id,
+            "name": config.display_name,
+            "description": config.description,
+            "requirements": {
+                "image_slots": img_count,
+                "text_structure": "bullets" if config.max_bullets and config.max_bullets > 0 else "paragraph",
+                "max_items": config.max_bullets or 0
+            },
+            "suitable_for": config.suitable_keywords
+        }
+        schemas.append(schema)
+        
+    return schemas

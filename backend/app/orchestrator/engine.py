@@ -430,6 +430,25 @@ class WorkflowEngine:
 
         # 3. 智能识别教学场景
         teaching_scenario = parsed.get("teaching_scenario", {})
+        
+        # 3.1 映射无效的场景类型到有效值
+        SCENE_TYPE_MAPPING = {
+            'classroom_teaching': 'theory',
+            'lecture': 'theory',
+            'hands_on': 'practice',
+            'workshop': 'practice',
+            'lab': 'practice',
+            'revision': 'review',
+            'exam_prep': 'review',
+            'assessment': 'review',
+        }
+        current_scene = teaching_scenario.get("scene_type", "unknown")
+        if current_scene not in ["theory", "practice", "review", "unknown"]:
+            mapped_scene = SCENE_TYPE_MAPPING.get(current_scene, "theory")
+            teaching_scenario["scene_type"] = mapped_scene
+            modifications.append(f"映射教学场景：{current_scene} → {mapped_scene}")
+        
+        # 3.2 如果仍是 unknown，尝试智能识别
         if not teaching_scenario.get("scene_type") or teaching_scenario.get("scene_type") == "unknown":
             assessed_scene = self._assess_teaching_scenario(user_text, knowledge_points)
             if assessed_scene != teaching_scenario.get("scene_type"):
@@ -619,7 +638,7 @@ class WorkflowEngine:
                 # 可以继续添加其他字段的优化逻辑
 
             except Exception as e:
-                self.logger.emit("optimization", "apply_error", {
+                self.logger.emit("system", "optimization", "apply_error", {
                     "field": field,
                     "error": str(e)
                 })
@@ -711,7 +730,7 @@ class WorkflowEngine:
             "error_message": str(error),
             "context": context or {}
         }
-        self.logger.emit(session_id, f"{stage}_error", error_info)
+        self.logger.emit(session_id, stage, "workflow_error", error_info)
 
         # 对于关键错误，可以设置降级策略
         if stage == "3.1" and isinstance(error, (json.JSONDecodeError, ValueError)):

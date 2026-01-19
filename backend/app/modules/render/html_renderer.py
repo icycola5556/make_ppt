@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from jinja2 import Environment, FileSystemLoader
 
 from ...common.schemas import SlideDeckContent, SlidePage, StyleConfig, TeachingRequest
+from ...common.llm_client import LLMClient
 from .schemas import RenderResult, ImageSlotRequest
 from .layout_engine import resolve_layout
 
@@ -20,15 +21,16 @@ from .layout_engine import resolve_layout
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 
-def render_html_slides(
+async def render_html_slides(
     deck_content: SlideDeckContent,
     style_config: StyleConfig,
     teaching_request: TeachingRequest,
     session_id: str,
-    output_dir: str
+    output_dir: str,
+    llm: Optional[LLMClient] = None
 ) -> RenderResult:
     """
-    渲染 HTML 幻灯片
+    渲染 HTML 幻灯片 (Async)
     
     Args:
         deck_content: 3.4 模块输出的内容
@@ -36,6 +38,7 @@ def render_html_slides(
         teaching_request: 3.1 模块输出的教学需求
         session_id: 会话 ID
         output_dir: 输出目录
+        llm: LLM客户端 (可选)
     
     Returns:
         RenderResult: 渲染结果,包含 HTML 路径和图片插槽
@@ -47,13 +50,13 @@ def render_html_slides(
     # 准备渲染数据
     slides_data = []
     all_image_slots = []
-    layouts_used = {}
+    layouts_used: Dict[str, int] = {}
     warnings = []
     
     # 处理每一页
     for page in deck_content.pages:
-        # 选择布局并生成图片插槽
-        layout_id, image_slots = resolve_layout(page, teaching_request, page.index)
+        # 选择布局并生成图片插槽 (Async call)
+        layout_id, image_slots = await resolve_layout(page, teaching_request, page.index, llm)
         
         # 统计布局使用
         layouts_used[layout_id] = layouts_used.get(layout_id, 0) + 1

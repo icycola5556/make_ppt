@@ -29,7 +29,14 @@
         </button>
         <button class="btn" @click="reset" :disabled="busy">重置</button>
       </div>
-      <div v-if="busy && currentStep" class="progress">⏳ {{ currentStep }}</div>
+      <!-- V2: 使用增强型进度组件 -->
+      <WorkflowProgress 
+        v-if="busy"
+        :main-message="currentStep || '处理中...'"
+        :current-step="currentStep"
+        :messages="workflowProgress.messages"
+        :progress="workflowProgress.progress"
+      />
       <div v-if="err" class="err">❌ {{ err }}</div>
     </section>
 
@@ -70,10 +77,13 @@ import { useWorkflow } from '../composables/useWorkflow'
 import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
+import WorkflowProgress from '../components/common/WorkflowProgress.vue'
 
 const {
   busy, err, currentStep, needUserInput, questions, answers,
-  teachingRequest, reset, runWorkflow
+  teachingRequest, reset, runWorkflow,
+  // V2: 增强型进度状态
+  workflowProgress, appendMessage
 } = useWorkflow()
 
 const testCaseList = testCases

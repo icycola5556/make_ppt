@@ -4,6 +4,8 @@ import Module32Style from '../views/Module32Style.vue'
 import Module33Outline from '../views/Module33Outline.vue'
 import Module34Content from '../views/Module34Content.vue'
 import Module35Render from '../views/Module35Render.vue'
+import OutlineEditorView from '../views/OutlineEditorView.vue'
+import ContentGeneratorView from '../views/ContentGeneratorView.vue'
 
 const routes = [
     { path: '/', redirect: '/3.1' },
@@ -12,7 +14,9 @@ const routes = [
     { path: '/3.3', name: 'Module3.3', component: Module33Outline },
     { path: '/3.4', name: 'Module3.4', component: Module34Content },
     { path: '/3.5', name: 'Module3.5', component: Module35Render },
-    // Placeholder for Full Workflow if needed, or just redirect for now
+    // 2-Stage Interactive Workflow
+    { path: '/outline-editor', name: 'OutlineEditor', component: OutlineEditorView },
+    { path: '/content-generator', name: 'ContentGenerator', component: ContentGeneratorView },
 ]
 
 const router = createRouter({

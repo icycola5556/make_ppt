@@ -4,47 +4,107 @@ Module 3.5: 布局选择引擎
 智能选择最适合的布局模板
 """
 
-from typing import Tuple, List, Optional
+import json
+from typing import Tuple, List, Optional, Any
 from ...common.schemas import SlidePage, TeachingRequest
+from ...common.llm_client import LLMClient
 from .schemas import ImageSlotRequest
-from .layout_configs import VOCATIONAL_LAYOUTS
+from .layout_configs import VOCATIONAL_LAYOUTS, get_layout_schema_for_llm
+from ...prompts.render import LAYOUT_AGENT_SYSTEM_PROMPT
 
 
-def resolve_layout(
+async def resolve_layout(
     page: SlidePage,
     teaching_request: TeachingRequest,
-    page_index: int
+    page_index: int,
+    llm: Optional[LLMClient] = None
 ) -> Tuple[str, List[ImageSlotRequest]]:
     """
-    智能选择布局并生成图片插槽
+    智能选择布局并生成图片插槽 (Async)
     
     Args:
         page: 页面数据 (来自 3.4 模块)
         teaching_request: 教学需求 (来自 3.1 模块)
         page_index: 页面索引
+        llm: LLM客户端 (可选)
     
     Returns:
         (layout_id, image_slots)
     """
     
-    # === 第一层: slide_type 强制映射 ===
+    # === 第一层: slide_type 强制映射 (Fast Path) ===
     layout_id = _map_by_slide_type(page.slide_type)
     if layout_id:
         return layout_id, _generate_image_slots(page, layout_id, page_index)
     
-    # === 第二层: 关键词语义匹配 ===
-    layout_id = _match_by_keywords(page)
-    if layout_id:
-        return layout_id, _generate_image_slots(page, layout_id, page_index)
+    # === 第二层: LLM 语义分析 (Semantic Agent) ===
+    if llm and llm.is_enabled():
+        try:
+            layout_id = await _analyze_with_llm(page, teaching_request, llm)
+        except Exception as e:
+            print(f"Layout Agent failed for page {page_index}: {e}")
+            # Fallback to rules if LLM fails
+            layout_id = _score_and_select(page, teaching_request)
+    else:
+        # Fallback to rules if LLM not provided/enabled
+        # === Legacy Second Layer: 关键词语义匹配 ===
+        layout_id = _match_by_keywords(page)
+        if not layout_id:
+            # === Legacy Third Layer: 元素特征分析 + 计分 ===
+            layout_id = _score_and_select(page, teaching_request)
     
-    # === 第三层: 元素特征分析 + 计分 ===
-    layout_id = _score_and_select(page, teaching_request)
-    
-    # === 第四层: 文本溢出检查和降级 ===
-    layout_id = _check_text_overflow(page, layout_id)
+    # === 第四层: 文本溢出检查和降级 (Safety Net) ===
+    # 无论来源如何，最后都做一次安全检查
+    layout_id = _check_text_overflow_and_downgrade(page, layout_id)
     
     return layout_id, _generate_image_slots(page, layout_id, page_index)
 
+
+LAYOUT_AGENT_SCHEMA_HINT = """{
+  "selected_layout_id": "string",
+  "reasoning": "string",
+  "content_refinement": {
+    "suggested_bullets": ["string"]
+  },
+  "confidence_score": "number"
+}"""
+
+
+async def _analyze_with_llm(page: SlidePage, req: TeachingRequest, llm: LLMClient) -> Optional[str]:
+    """Invokes the Layout Decision Agent"""
+    
+    # Prepare Context
+    slide_content = {
+        "title": page.title,
+        "type": page.slide_type,
+        "bullets": [str(e.content) for e in page.elements if e.type in ["text", "bullets"]],
+        "image_count": sum(1 for e in page.elements if e.type in ["image", "diagram"]),
+        "domain": req.subject_info.subject_name
+    }
+    
+    available_layouts = get_layout_schema_for_llm()
+    
+    user_msg = json.dumps({
+        "slide_content": slide_content,
+        "available_layouts": available_layouts
+    }, ensure_ascii=False)
+    
+    # Call LLM
+    try:
+        response, _ = await llm.chat_json(
+            system=LAYOUT_AGENT_SYSTEM_PROMPT,
+            user=user_msg,
+            json_schema_hint=LAYOUT_AGENT_SCHEMA_HINT
+        )
+        
+        selected_id = response.get("selected_layout_id")
+        if selected_id and selected_id in VOCATIONAL_LAYOUTS:
+            return selected_id
+            
+    except Exception as e:
+        raise e
+        
+    return None
 
 def _map_by_slide_type(slide_type: str) -> Optional[str]:
     """slide_type 强制映射"""
@@ -58,20 +118,13 @@ def _map_by_slide_type(slide_type: str) -> Optional[str]:
         "agenda": "title_bullets",
         
         # 职教专用
-        "steps": "operation_steps",
-        "practice": "operation_steps",
-        "demo": "operation_steps",
-        "comparison": "concept_comparison",
-        "contrast": "concept_comparison",
-        "tools": "grid_4",
-        "equipment": "grid_4",
-        "gallery": "grid_4",
+        # "steps": "operation_steps", # Let LLM decide closer for steps/process
+        # "practice": "operation_steps",
     }
     return TYPE_LAYOUT_MAP.get(slide_type)
 
-
 def _match_by_keywords(page: SlidePage) -> Optional[str]:
-    """关键词语义匹配"""
+    """关键词语义匹配 (Legacy)"""
     title_text = page.title.lower() if page.title else ""
     content_text = " ".join([str(e.content) for e in page.elements]).lower()
     full_text = f"{title_text} {content_text}"
@@ -87,7 +140,6 @@ def _match_by_keywords(page: SlidePage) -> Optional[str]:
             return layout_id
     
     return None
-
 
 def _score_and_select(page: SlidePage, req: TeachingRequest) -> str:
     """计分机制选择布局"""
@@ -131,14 +183,24 @@ def _score_and_select(page: SlidePage, req: TeachingRequest) -> str:
     # 返回最高分
     return max(scores, key=scores.get)
 
-
-def _check_text_overflow(page: SlidePage, layout_id: str) -> str:
+def _check_text_overflow_and_downgrade(page: SlidePage, layout_id: Optional[str]) -> str:
     """检查文本溢出并降级"""
+    if not layout_id:
+        return "title_bullets" # Default
+        
+    config = VOCATIONAL_LAYOUTS.get(layout_id)
+    if not config:
+        return "title_bullets"
+
     text_len = _calculate_text_length(page)
     
-    # 如果文本过长,强制降级
-    if text_len > 500:
-        return "title_bullets"  # 纯文本布局
+    # 1. Check strict text length limit if defined
+    if config.max_text_length and text_len > config.max_text_length + 50: # Allow small buffer
+         return "title_bullets"
+    
+    # 2. Universal hard limit
+    if text_len > 600:
+        return "title_bullets"
     
     return layout_id
 
@@ -163,10 +225,6 @@ def _generate_image_slots(
     layout_id: str,
     page_index: int
 ) -> List[ImageSlotRequest]:
-    """
-    根据布局生成图片插槽
-    
-    这是一个简化版本,完整实现在 placeholder_generator.py
-    """
+    """根据布局生成图片插槽"""
     from .placeholder_generator import create_image_placeholders_for_page
     return create_image_placeholders_for_page(page, layout_id, page_index)

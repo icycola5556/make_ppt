@@ -202,8 +202,303 @@ async def sync_style(req: StyleSyncRequest):
         return {"ok": False, "error": str(e)}
 
 
+# =============================================================================
+# Phase 1: Outline Editor Endpoints (2-Stage Workflow)
+# =============================================================================
+
+# =============================================================================
+# Phase 1: Outline Editor Endpoints (2-Stage Workflow)
+# =============================================================================
+
+from .common.schemas import OutlineSlide, PPTOutline, TeachingRequest
+
+class OutlineUpdateRequest(BaseModel):
+    session_id: str
+    slides: List[OutlineSlide]
+
+class OutlineUpdateResponse(BaseModel):
+    ok: bool
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+@app.post("/api/workflow/outline/update", response_model=OutlineUpdateResponse)
+async def update_outline(req: OutlineUpdateRequest):
+    """
+    Save user-edited outline back to session (Phase 1 - Outline Editor).
+    
+    Allows frontend to save reordered, edited, added, or deleted slides
+    before proceeding to content generation.
+    """
+    try:
+        state = store.load(req.session_id)
+        if not state:
+            return OutlineUpdateResponse(ok=False, error="Session not found")
+        
+        if not state.outline:
+            return OutlineUpdateResponse(ok=False, error="No outline found in session. Run Module 3.3 first.")
+        
+        # Update the slides array in the existing outline
+        state.outline.slides = req.slides
+        store.save(state)
+        
+        logger.emit(req.session_id, "3.3", "outline_updated", {
+            "slide_count": len(req.slides),
+            "source": "outline_editor"
+        })
+        
+        return OutlineUpdateResponse(
+            ok=True, 
+            message=f"Outline updated with {len(req.slides)} slides"
+        )
+    except Exception as e:
+        logger.emit(req.session_id, "3.3", "outline_update_error", {"error": str(e)})
+        return OutlineUpdateResponse(ok=False, error=str(e))
+
+
+# =============================================================================
+# Phase 6: Async Parallel Outline Generation (Structure + Expand)
+# =============================================================================
+
+class OutlineStructureRequest(BaseModel):
+    session_id: str
+    style_name: Optional[str] = None
+
+class OutlineStructureResponse(BaseModel):
+    ok: bool
+    outline: Optional[PPTOutline]
+    error: Optional[str] = None
+
+@app.post("/api/workflow/outline/structure", response_model=OutlineStructureResponse)
+async def generate_outline_structure_endpoint(req: OutlineStructureRequest):
+    """Step 1: 快速生成大纲结构"""
+    try:
+        from .modules.outline.core import generate_outline_structure
+        
+        state = store.load(req.session_id)
+        if not state or not state.teaching_request:
+            return OutlineStructureResponse(ok=False, outline=None, error="Session or request not found")
+
+        outline = await generate_outline_structure(
+            state.teaching_request,
+            req.style_name,
+            llm,
+            logger,
+            req.session_id
+        )
+        
+        # Save preliminary outline to state
+        state.outline = outline
+        store.save(state)
+        
+        return OutlineStructureResponse(ok=True, outline=outline)
+    except Exception as e:
+        return OutlineStructureResponse(ok=False, outline=None, error=str(e))
+
+
+class SlideExpandRequest(BaseModel):
+    session_id: str
+    slide_index: int  # 0-based index from slides array
+
+class SlideExpandResponse(BaseModel):
+    ok: bool
+    slide: Optional[OutlineSlide]
+    error: Optional[str] = None
+
+@app.post("/api/workflow/outline/expand", response_model=SlideExpandResponse)
+async def expand_slide_detail_endpoint(req: SlideExpandRequest):
+    """Step 2: 并行扩展单页详情"""
+    try:
+        from .modules.outline.core import expand_slide_details
+        
+        state = store.load(req.session_id)
+        if not state or not state.outline:
+            return SlideExpandResponse(ok=False, slide=None, error="No outline to expand")
+            
+        if not state.teaching_request:
+            return SlideExpandResponse(ok=False, slide=None, error="No teaching request found")
+            
+        slides = state.outline.slides
+        if req.slide_index < 0 or req.slide_index >= len(slides):
+            return SlideExpandResponse(ok=False, slide=None, error="Invalid slide index")
+            
+        target_slide = slides[req.slide_index]
+        
+        # Build context from session
+        deck_context = {
+            "subject": state.teaching_request.subject,
+            "scene": state.teaching_request.teaching_scene,
+            "objectives": state.teaching_request.teaching_objectives.knowledge,
+        }
+        
+        expanded_slide = await expand_slide_details(
+            target_slide,
+            state.teaching_request,
+            deck_context,
+            llm
+        )
+        
+        # Update state (with lock mechanism ideally, but simple assignment here)
+        # Note: In a real concurrent env, this read-modify-write on 'state' might be race-prone
+        # But for this prototype, we rely on session store's simplicity or minimal collision risk
+        # Since we are modifying a specific index in a list object that is already in memory...
+        # Actually Python objects are passed by reference, so modifying 'target_slide' modifies 'state.outline.slides[i]'
+        # We just need to save state.
+        state.outline.slides[req.slide_index] = expanded_slide
+        store.save(state) 
+        
+        return SlideExpandResponse(ok=True, slide=expanded_slide)
+        
+    except Exception as e:
+        return SlideExpandResponse(ok=False, slide=None, error=str(e))
+
+
+# =============================================================================
+# Phase 2: Async Content Generation Endpoints (2-Stage Workflow)
+# =============================================================================
+
+class SlideContentGenerateRequest(BaseModel):
+    session_id: str
+    slide_index: int
+    context: Optional[Dict[str, Any]] = None  # Additional context if needed
+
+
+class SlideContent(BaseModel):
+    """Generated content for a single slide."""
+    script: str  # Speaker script/notes
+    bullets: List[str]  # Detailed bullet points
+    visual_suggestions: List[str]  # Image/diagram suggestions
+
+
+class SlideContentGenerateResponse(BaseModel):
+    ok: bool
+    slide_index: int
+    content: Optional[SlideContent] = None
+    error: Optional[str] = None
+
+
+@app.post("/api/workflow/slide/generate", response_model=SlideContentGenerateResponse)
+async def generate_slide_content(req: SlideContentGenerateRequest):
+    """
+    Generate detailed content for a single slide (Phase 2 - Async Generation).
+    
+    This endpoint is called in parallel for each slide to generate:
+    - Speaker script
+    - Detailed bullet points  
+    - Visual suggestions
+    """
+    try:
+        state = store.load(req.session_id)
+        if not state:
+            return SlideContentGenerateResponse(
+                ok=False, slide_index=req.slide_index, error="Session not found"
+            )
+        
+        if not state.outline:
+            return SlideContentGenerateResponse(
+                ok=False, slide_index=req.slide_index, error="No outline found"
+            )
+        
+        if req.slide_index < 0 or req.slide_index >= len(state.outline.slides):
+            return SlideContentGenerateResponse(
+                ok=False, slide_index=req.slide_index, error=f"Invalid slide index: {req.slide_index}"
+            )
+        
+        slide = state.outline.slides[req.slide_index]
+        
+        # Check if LLM is enabled
+        if not llm.is_enabled():
+            # Return mock content when LLM is disabled
+            mock_content = SlideContent(
+                script=f"讲解{slide.title}的核心内容，确保学生理解关键概念。",
+                bullets=slide.bullets if slide.bullets else [f"{slide.title}的要点1", f"{slide.title}的要点2"],
+                visual_suggestions=[f"建议配图：{slide.title}相关示意图"]
+            )
+            return SlideContentGenerateResponse(
+                ok=True, slide_index=req.slide_index, content=mock_content
+            )
+        
+        # Build prompt for single slide content generation
+        context_info = f"""
+课程主题：{state.outline.deck_title}
+知识点：{', '.join(state.outline.knowledge_points)}
+教学场景：{state.outline.teaching_scene}
+"""
+        
+        prompt = f"""请为以下PPT幻灯片生成详细内容：
+
+{context_info}
+
+当前幻灯片 (第 {req.slide_index + 1}/{len(state.outline.slides)} 页)：
+- 类型：{slide.slide_type}
+- 标题：{slide.title}
+- 要点：{', '.join(slide.bullets) if slide.bullets else '无'}
+
+请生成：
+1. **演讲脚本** (speaker script)：2-4句话，讲师讲解这一页时说的话
+2. **详细要点** (bullets)：3-5个详细的知识点，每个10-20字
+3. **视觉建议** (visual_suggestions)：1-3个图片或图表建议
+
+要求：
+- 内容专业、准确、适合教学
+- 语言简洁清晰
+- 视觉建议要具体可执行
+
+返回JSON格式：
+{{
+    "script": "演讲脚本内容",
+    "bullets": ["要点1", "要点2", "要点3"],
+    "visual_suggestions": ["图片建议1", "图片建议2"]
+}}
+"""
+        
+        logger.emit(req.session_id, "3.4", "slide_generate_start", {
+            "slide_index": req.slide_index,
+            "slide_type": slide.slide_type
+        })
+        
+        # Call LLM
+        system_prompt = "你是一位专业的教学内容设计师，擅长为PPT幻灯片生成详细的教学内容。请以JSON格式返回。"
+        json_schema = '''{"script": "string", "bullets": ["string"], "visual_suggestions": ["string"]}'''
+        
+        result, _meta = await llm.chat_json(
+            system=system_prompt,
+            user=prompt,
+            json_schema_hint=json_schema
+        )
+        
+        if not result:
+            return SlideContentGenerateResponse(
+                ok=False, slide_index=req.slide_index, error="LLM returned empty response"
+            )
+        
+        content = SlideContent(
+            script=result.get("script", ""),
+            bullets=result.get("bullets", []),
+            visual_suggestions=result.get("visual_suggestions", [])
+        )
+        
+        logger.emit(req.session_id, "3.4", "slide_generate_done", {
+            "slide_index": req.slide_index,
+            "bullet_count": len(content.bullets)
+        })
+        
+        return SlideContentGenerateResponse(
+            ok=True, slide_index=req.slide_index, content=content
+        )
+        
+    except Exception as e:
+        logger.emit(req.session_id, "3.4", "slide_generate_error", {
+            "slide_index": req.slide_index,
+            "error": str(e)
+        })
+        return SlideContentGenerateResponse(
+            ok=False, slide_index=req.slide_index, error=str(e)
+        )
+
+
 @app.post("/api/workflow/render")
-def render_html_slides_api(req: dict):
+async def render_html_slides_api(req: dict):
     """调用 3.5 模块渲染 HTML 幻灯片"""
     try:
         session_id = req.get("session_id")
@@ -220,17 +515,21 @@ def render_html_slides_api(req: dict):
         if not state.style_config:
             return {"ok": False, "error": "No style_config found"}
         
+        if not state.teaching_request:
+            return {"ok": False, "error": "No teaching_request found"}
+        
         from .modules.render import render_html_slides
         
         output_dir = Path(DATA_DIR) / "outputs"
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        result = render_html_slides(
+        result = await render_html_slides(
             deck_content=state.deck_content,
             style_config=state.style_config,
             teaching_request=state.teaching_request,
             session_id=session_id,
             output_dir=str(output_dir),
+            llm=llm
         )
         
         state.render_result = result
@@ -264,8 +563,8 @@ def render_html_slides_api(req: dict):
         return {"ok": False, "error": str(e)}
 
 
-@app.post("/api/workflow/render-mock-deprecated")
-def render_html_slides_mock_deprecated():
+@app.post("/api/workflow/render/mock_deprecated")
+async def render_html_slides_mock_deprecated():
     """
     使用 mock 3.4 数据测试 3.5 模块渲染
     
@@ -552,7 +851,7 @@ def render_html_slides_mock_deprecated():
         
         session_id = f"mock_{int(time.time())}"
         
-        result = render_html_slides(
+        result = await render_html_slides(
             deck_content=mock_deck,
             style_config=mock_style,
             teaching_request=mock_request,
@@ -655,8 +954,8 @@ def get_render_status(session_id: str):
     return {"ok": True, "images": status.get("images", {})}
 
 
-@app.post("/api/workflow/render-mock")
-def render_html_slides_mock(background_tasks: BackgroundTasks):
+@app.post("/api/workflow/render/mock")
+async def render_html_slides_mock(background_tasks: BackgroundTasks):
     """
     使用真实的 Mock 数据测试 3.5 模块 (流式渲染 + 缓存)
     """
@@ -837,7 +1136,7 @@ def render_html_slides_mock(background_tasks: BackgroundTasks):
         output_dir = Path(DATA_DIR) / "outputs"
         session_id = f"mock_{int(time.time())}"
         
-        result = render_html_slides(
+        result = await render_html_slides(
             deck_content=deck,
             style_config=style_config,
             teaching_request=teaching_req,

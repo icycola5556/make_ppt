@@ -8,6 +8,37 @@
 
     <ApiConfig />
 
+    <!-- V3: 缓存状态展示 -->
+    <CacheStatus 
+      active-step="3.2" 
+      @use-cache="handleUseCache" 
+    />
+
+    <!-- V3: 缓存已加载提示 -->
+    <section v-if="cacheLoaded && teachingRequest" class="card cache-loaded">
+      <div class="h3">✅ 已加载 3.1 缓存</div>
+      <div class="cache-info">
+        <div class="info-item">
+          <span class="label">学科：</span>
+          <span class="value">{{ teachingRequest.subject_info?.subject_name || '未指定' }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">知识点：</span>
+          <span class="value">{{ teachingRequest.knowledge_points?.map(kp => kp.name).join('、') || '无' }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">场景：</span>
+          <span class="value">{{ teachingRequest.teaching_scenario?.scene_type || 'unknown' }}</span>
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary" @click="runStyleFromCache" :disabled="busy">
+          基于缓存运行风格设计
+        </button>
+      </div>
+      <div v-if="busy && currentStep" class="progress">⏳ {{ currentStep }}</div>
+    </section>
+
     <!-- 输入区 -->
     <section class="card">
       <div class="h3">输入需求（将先执行3.1再执行3.2）</div>
@@ -265,8 +296,44 @@ import { useWorkflow } from '../composables/useWorkflow'
 import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
+import CacheStatus from '../components/common/CacheStatus.vue'
 
-const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, styleSamples, sessionId, reset, runWorkflow } = useWorkflow()
+const { 
+  busy, err, currentStep, needUserInput, questions, answers, 
+  teachingRequest, styleConfig, styleSamples, sessionId, reset, runWorkflow,
+  // V3: 缓存相关
+  stepCache, loadFromCache, hasCache 
+} = useWorkflow()
+
+// V3: 缓存加载状态
+const cacheLoaded = ref(false)
+
+// V3: 处理使用缓存的事件
+function handleUseCache(stepId) {
+  console.log('[Module32] 使用缓存:', stepId)
+  
+  if (stepId === '3.1' && hasCache('3.1')) {
+    // 加载 3.1 缓存到当前状态
+    teachingRequest.value = loadFromCache('3.1')
+    cacheLoaded.value = true
+    currentStep.value = '✅ 已加载 3.1 缓存，可点击下方按钮运行风格设计'
+  }
+}
+
+// V3: 基于缓存运行风格设计
+async function runStyleFromCache() {
+  if (!teachingRequest.value) {
+    err.value = '未加载缓存，无法运行'
+    return
+  }
+  try {
+    // 直接调用 3.2，使用已载入的 teachingRequest
+    await runWorkflow({ stop_at: '3.2' })
+    cacheLoaded.value = false  // 运行后重置状态
+  } catch (e) {
+    err.value = e.message
+  }
+}
 
 const testCaseList = testCases
 const rawText = ref('')
@@ -436,6 +503,11 @@ function confirmRefine() {
 .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; background: #fff; margin-bottom: 16px; }
 .card.highlight { border-color: #059669; border-width: 2px; }
 .card.warn { border-color: #f59e0b55; background: #fffbeb; }
+.card.cache-loaded { border-color: #22c55e; background: #f0fdf4; }
+.cache-info { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; }
+.cache-info .info-item { display: flex; gap: 8px; }
+.cache-info .label { color: #6b7280; font-size: 13px; }
+.cache-info .value { font-weight: 600; font-size: 13px; color: #059669; }
 .h3 { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 .h4 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; color: #374151; }
 .textarea { width: 100%; min-height: 80px; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px; font-size: 14px; }

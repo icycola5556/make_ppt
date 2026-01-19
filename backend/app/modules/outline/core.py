@@ -390,6 +390,159 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
 # LLM智能规划生成
 # ============================================================================
 
+
+# ============================================================================
+# LLM智能规划生成 (Split Workflow)
+# ============================================================================
+
+async def generate_outline_structure(
+    req: TeachingRequest,
+    style_name: Optional[str],
+    llm: Any,
+    logger: Any,
+    session_id: str,
+) -> PPTOutline:
+    """Step 1: 快速生成大纲结构（仅包含 index, type, title, brief_intent）"""
+    
+    if not llm.is_enabled():
+        # Fallback to deterministic
+        return generate_outline(req, style_name)
+
+    # 1. Prepare Prompt
+    system_prompt = _get_slide_type_definitions() + "\n\n" + """
+    你是高职课程PPT大纲规划师。请根据教学需求，快速规划PPT的页面结构。
+    
+    任务：
+    1. 规划 8-15 页 PPT
+    2. 确定每页的 slide_type (必须准确)
+    3. 确定每页的 title (简短明确)
+    4. 简要说明每页的设计意图 (brief_intent)
+    
+    页面分配原则：
+    - 封面(title) -> 目标(objectives) -> 导入(intro) -> 讲解(concept/content) ... -> 总结(summary)
+    
+    输出 JSON 格式:
+    {
+      "slides": [
+        {"index": 1, "slide_type": "title", "title": "...", "brief_intent": "..."},
+        ...
+      ]
+    }
+    """
+    
+    user_payload = {
+        "subject": req.subject,
+        "scene": req.teaching_scene,
+        "kps": req.kp_names,
+        "objectives": req.teaching_objectives.knowledge,
+        "target_count": req.slide_requirements.target_count
+    }
+    user_msg = json.dumps(user_payload, ensure_ascii=False)
+    
+    schema_hint = """{
+      "slides": [
+        {"index": "int", "slide_type": "string", "title": "string", "brief_intent": "string"}
+      ]
+    }"""
+
+    # 2. Call LLM
+    try:
+        parsed, meta = await llm.chat_json(
+            system_prompt, user_msg, schema_hint, temperature=0.3
+        )
+        logger.emit(session_id, "3.3", "structure_generated", meta)
+        
+        # 3. Construct PPTOutline (empty details)
+        slides_data = parsed.get("slides", [])
+        slides = []
+        for i, s in enumerate(slides_data, 1):
+            slides.append(OutlineSlide(
+                index=i,
+                slide_type=s.get("slide_type", "content"),
+                title=s.get("title", f"Page {i}"),
+                bullets=[], # To be filled
+                notes=s.get("brief_intent", ""),
+                assets=[],
+                interactions=[]
+            ))
+            
+        outline = PPTOutline(
+            deck_title=req.subject, # Simple default
+            subject=req.subject,
+            knowledge_points=req.kp_names,
+            teaching_scene=req.teaching_scene,
+            slides=slides
+        )
+        
+        # Adjust count if needed (simplified version of _adjust...)
+        # We trust LLM mostly here for structure
+        
+        return outline
+        
+    except Exception as e:
+        logger.emit(session_id, "3.3", "structure_error", {"error": str(e)})
+        return generate_outline(req, style_name)
+
+
+async def expand_slide_details(
+    slide: OutlineSlide,
+    req: TeachingRequest,
+    deck_context: Dict[str, Any],
+    llm: Any,
+) -> OutlineSlide:
+    """Step 2: 并行扩展单页详细内容 (Bullets, Assets, Interactions)"""
+    
+    if not llm.is_enabled():
+        slide.bullets = ["(Mock) Point 1", "(Mock) Point 2"]
+        return slide
+        
+    system_prompt = """
+    你是高职课程内容设计师。请完善单页PPT的详细教学内容。
+    
+    输入上下文：
+    - 课程主题、场景
+    - 当前页标题、类型、设计意图
+    
+    请生成：
+    1. bullets: 3-5个核心要点 (符合slide_type特点)
+    2. assets: 必要的素材占位 (image/chart/icon)
+    3. interactions: 互动设计 (仅当适合时)
+    
+    输出 JSON:
+    {
+      "bullets": ["..."],
+      "assets": [{"type": "...", "theme": "..."}],
+      "interactions": ["..."]
+    }
+    """
+    
+    user_payload = {
+        "context": deck_context,
+        "slide": {
+            "type": slide.slide_type,
+            "title": slide.title,
+            "intent": slide.notes
+        }
+    }
+    
+    try:
+        parsed, _ = await llm.chat_json(
+            system_prompt, 
+            json.dumps(user_payload, ensure_ascii=False),
+            None # Schema hint implicit
+        )
+        
+        slide.bullets = parsed.get("bullets", slide.bullets)
+        slide.assets = parsed.get("assets", slide.assets)
+        slide.interactions = parsed.get("interactions", slide.interactions)
+        
+        return slide
+        
+    except Exception as e:
+        print(f"Error expanding slide {slide.index}: {e}")
+        return slide
+
+# Keep original monolithic function for backward compatibility or direct fallback
 async def generate_outline_with_llm(
     req: TeachingRequest,
     style_name: Optional[str],
@@ -397,27 +550,9 @@ async def generate_outline_with_llm(
     logger: Any,  # WorkflowLogger
     session_id: str,
 ) -> PPTOutline:
-    """使用LLM进行智能规划生成PPT大纲。
-    
-    此函数会：
-    1. 评估知识点难度和教学逻辑
-    2. 智能分配页面数量和类型
-    3. 生成合适的互动设计和素材需求
-    4. 优化标题和要点表述
-    
-    Args:
-        req: 教学需求（3.1模块输出）
-        style_name: 风格名称（3.2模块输出）
-        llm: LLM客户端
-        logger: 日志记录器
-        session_id: 会话ID
-        
-    Returns:
-        PPTOutline: 优化后的PPT大纲
-    """
+    """使用LLM进行智能规划生成PPT大纲 (Monolithic Strategy)。"""
     
     if not llm.is_enabled():
-        # LLM未启用，使用确定性生成
         return generate_outline(req, style_name)
     
     # 构建用户输入消息
@@ -523,18 +658,13 @@ async def _refine_slide_types(
     logger: Any,  # WorkflowLogger
     session_id: str,
 ) -> PPTOutline:
-    """使用LLM更准确地判断每页的slide_type
-    
-    根据slide_type.json中的定义，对每页的slide_type进行精确判断和修正。
-    """
+    """使用LLM更准确地判断每页的slide_type"""
     if not llm.is_enabled():
         return outline
     
     slide_type_data = _load_slide_types()
     available_types = [st["slide_type"] for st in slide_type_data.get("slide_types", [])]
-    slide_type_defs = _get_slide_type_definitions()
     
-    # 构建类型判断的prompt
     type_refinement_prompt = f"""你是PPT页面类型判断专家。请根据每页的实际内容（title和bullets），从以下页面类型中选择最准确的一个：
 
 {_get_slide_type_definitions()}
@@ -547,59 +677,44 @@ async def _refine_slide_types(
 5. 教学目标页必须使用"objectives"类型
 
 ## 输入格式
-你将收到一个包含slides数组的JSON对象，每个slide包含：
-- index: 页面序号
-- slide_type: 当前类型（可能需要修正）
-- title: 页面标题
-- bullets: 页面要点列表
+你将收到一个包含slides数组的JSON对象
 
 ## 输出要求
-返回完整的PPTOutline JSON对象，只修改slides数组中每页的slide_type字段，确保：
-- 所有slide_type都在上述可用类型列表中
-- 类型准确匹配页面内容
-- 保持其他字段不变
+返回完整的PPTOutline JSON对象，只修改slides数组中每页的slide_type字段
 
 只输出JSON对象，不要解释。"""
     
-    # 准备用户消息
     outline_data = outline.model_dump(mode="json")
     user_msg = json.dumps({
         "outline": outline_data,
         "instruction": "请为每页选择最准确的slide_type，确保类型准确匹配页面内容。"
     }, ensure_ascii=False, indent=2)
     
-    # 获取Schema
     schema_hint = PPTOutline.model_json_schema()
     schema_str = json.dumps(schema_hint, ensure_ascii=False, indent=2)
     
     try:
         logger.emit(session_id, "3.3", "slide_type_refinement_prompt", {
             "system": type_refinement_prompt,
-            "user": outline_data,
+            "user": outline_data
         })
         
-        # 调用LLM进行类型判断
         parsed, meta = await llm.chat_json(
             type_refinement_prompt,
             user_msg,
             schema_str,
-            temperature=0.1,  # 低温度确保类型判断的准确性
+            temperature=0.1,
         )
         
         logger.emit(session_id, "3.3", "slide_type_refinement_response", meta)
         
-        # LLM可能返回包装在"outline"键中的数据，需要解包
         if isinstance(parsed, dict) and "outline" in parsed and len(parsed) == 1:
-            # 如果返回的是 {"outline": {...}}，提取outline内容
             parsed = parsed["outline"]
         elif isinstance(parsed, dict) and "outline" in parsed:
-            # 如果返回的是 {"outline": {...}, "instruction": "..."}，提取outline内容
             parsed = parsed["outline"]
         
-        # 验证并返回结果
         refined_outline = PPTOutline.model_validate(parsed)
         
-        # 验证所有slide_type都在可用列表中
         for slide in refined_outline.slides:
             if slide.slide_type not in available_types:
                 logger.emit(session_id, "3.3", "slide_type_warning", {
@@ -607,7 +722,6 @@ async def _refine_slide_types(
                     "invalid_type": slide.slide_type,
                     "fallback_to_original": True,
                 })
-                # 如果类型无效，保持原类型
                 original_slide = next((s for s in outline.slides if s.index == slide.index), None)
                 if original_slide:
                     slide.slide_type = original_slide.slide_type
@@ -615,12 +729,12 @@ async def _refine_slide_types(
         return refined_outline
         
     except Exception as e:
-        # 类型判断失败，返回原大纲
         logger.emit(session_id, "3.3", "slide_type_refinement_error", {
             "error": str(e),
             "fallback_to_original": True,
         })
         return outline
+
 
 
 def _adjust_outline_to_target_count(outline: PPTOutline, target_count: Optional[int]) -> PPTOutline:

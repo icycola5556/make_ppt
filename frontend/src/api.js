@@ -42,7 +42,7 @@ export const api = {
     })
   },
   renderMock() {
-    return http('/api/workflow/render-mock', { method: 'POST' })
+    return http('/api/workflow/render/mock', { method: 'POST' })
   },
   getSession(session_id) { return http(`/api/session/${session_id}`) },
   getSlideTypes() { return http('/api/slide-types') },
@@ -52,5 +52,44 @@ export const api = {
   },
   getRenderStatus(session_id) {
     return http(`/api/workflow/render/status/${session_id}`)
+  },
+
+  // ======= Phase 1: Outline Editor =======
+  updateOutline(session_id, slides) {
+    return http('/api/workflow/outline/update', {
+      method: 'POST',
+      body: { session_id, slides }
+    })
+  },
+
+  // ======= Phase 2: Async Content Generation =======
+  generateSlideContent(session_id, slide_index, context = null) {
+    return http('/api/workflow/slide/generate', {
+      method: 'POST',
+      body: { session_id, slide_index, context }
+    })
+  },
+
+  // ======= Phase 6: Parallel Outline & Render =======
+  generateOutlineStructure(session_id, style_name = null) {
+    return http('/api/workflow/outline/structure', {
+      method: 'POST',
+      body: { session_id, style_name }
+    })
+  },
+
+  expandSlide(session_id, slide_index) {
+    return http('/api/workflow/outline/expand', {
+      method: 'POST',
+      body: { session_id, slide_index }
+    })
+  },
+
+  renderSlides(session_id) {
+    return http('/api/workflow/render', {
+      method: 'POST',
+      body: { session_id }
+    })
   }
 }
+

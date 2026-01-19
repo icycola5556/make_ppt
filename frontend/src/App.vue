@@ -53,8 +53,8 @@ const currentTab = computed(() => {
   const path = route.path
   if (path === '/' || path === '/3.1') return '3.1'
   if (path.includes('3.2')) return '3.2'
-  if (path.includes('3.3')) return '3.3'
-  if (path.includes('3.4')) return '3.4'
+  if (path.includes('3.3') || path.includes('outline-editor')) return '3.3'
+  if (path.includes('3.4') || path.includes('content-generator')) return '3.4'
   if (path.includes('3.5')) return '3.5'
   return '3.1'
 })

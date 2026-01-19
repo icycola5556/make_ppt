@@ -624,7 +624,14 @@ async def _refine_style_with_comprehensive_analysis(
         return current_config, [f"综合分析失败: {str(e)}"], f"风格综合分析失败: {str(e)}"
 
 def build_style_samples(req: TeachingRequest, cfg: StyleConfig) -> List[StyleSampleSlide]:
-    kp_names = [kp.name for kp in req.knowledge_points]
+    # 防止 req 为 None 时报错
+    if req is None:
+        return [
+            StyleSampleSlide(kind="cover", title="课件", bullets=["理论课件", "简洁清晰 | 重点突出"]),
+            StyleSampleSlide(kind="content", title="核心概念页示例", bullets=["定义", "关键要点", "常见误区/注意"]),
+            StyleSampleSlide(kind="steps", title="案例/习题页示例", bullets=["情境描述", "分析步骤", "小结"]),
+        ]
+    kp_names = [kp.name for kp in req.knowledge_points] if req.knowledge_points else []
     deck_title = " / ".join(kp_names) if kp_names else "课件"
     if req.teaching_scene == "practice":
         return [

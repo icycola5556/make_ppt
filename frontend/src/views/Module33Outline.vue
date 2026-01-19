@@ -7,6 +7,12 @@
     <p class="desc">基于教学需求和风格配置生成PPT结构化大纲</p>
 
     <ApiConfig />
+    
+    <!-- V3: 缓存状态展示 -->
+    <CacheStatus 
+      active-step="3.3" 
+      @use-cache="handleUseCache" 
+    />
 
     <!-- 输入区 -->
     <section class="card">
@@ -303,15 +309,38 @@
       <div class="h3">3.3 PPT大纲结果</div>
       
       <!-- 大纲预览 -->
+      <!-- 大纲预览 (Parallel Generation UI) -->
       <div class="outline-preview">
-        <div class="outline-title">{{ outline.deck_title || outline.title || '未命名大纲' }}</div>
-        <div class="slide-count">共 {{ outline.slides?.length || 0 }} 页</div>
+        <div class="outline-header">
+            <div class="outline-title">{{ outline.deck_title || outline.title || '未命名大纲' }}</div>
+            <div class="slide-count">共 {{ outline.slides?.length || 0 }} 页</div>
+        </div>
+        
+        <!-- Progress Bar for Expansion -->
+        <div v-if="outlineGenerator.isExpanding.value || outlineGenerator.progress.value.completed > 0" class="expansion-progress">
+             <div class="progress-info">
+                <span>生成详情中... {{ outlineGenerator.progress.value.completed }} / {{ outlineGenerator.progress.value.total }}</span>
+                <span>{{ outlineGenerator.progress.value.percent }}%</span>
+             </div>
+             <div class="progress-track">
+                <div class="progress-fill" :style="{ width: outlineGenerator.progress.value.percent + '%' }"></div>
+             </div>
+        </div>
+
         <div class="slides-list">
-          <div v-for="(slide, i) in outline.slides" :key="i" class="slide-item">
+          <div v-for="(slide, i) in outline.slides" :key="i" class="slide-item" :class="{ 'is-loading': outlineGenerator.slideStatus[i] === 'loading' }">
             <span class="slide-num">{{ i + 1 }}</span>
             <div class="slide-info">
-              <span class="slide-type">{{ getSlideTypeLabel(slide.slide_type) }}</span>
-              <span class="slide-title">{{ slide.title }}</span>
+              <div class="slide-row-1">
+                  <span class="slide-type">{{ getSlideTypeLabel(slide.slide_type) }}</span>
+                  <span class="slide-title">{{ slide.title }}</span>
+                  <!-- Status Icon -->
+                  <span class="slide-status-icon">
+                      <span v-if="outlineGenerator.slideStatus[i] === 'loading'" class="spin">🔄</span>
+                      <span v-else-if="outlineGenerator.slideStatus[i] === 'done'">✅</span>
+                      <span v-else-if="outlineGenerator.slideStatus[i] === 'error'" title="生成失败">❌</span>
+                  </span>
+              </div>
               <span v-if="getSlideTypeDescription(slide.slide_type)" class="slide-desc">{{ getSlideTypeDescription(slide.slide_type) }}</span>
             </div>
           </div>
@@ -319,25 +348,199 @@
       </div>
       
       <JsonBlock title="outline.json" :value="outline" filename="outline.json" />
+      
+      <!-- 2-Stage Workflow Entry -->
+      <div class="workflow-entry">
+        <div class="workflow-hint">✨ 想要编辑大纲或生成详细内容？</div>
+        <button class="primary workflow-btn" @click="goToOutlineEditor">
+          📋 进入大纲编辑器
+        </button>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useWorkflow } from '../composables/useWorkflow'
+import { useOutlineGenerator } from '../composables/useOutlineGenerator'
 import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
+import CacheStatus from '../components/common/CacheStatus.vue'
 import { api, getApiBase } from '../api'
 
-const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, styleSamples, sessionId, sessionState, outline, reset, runWorkflow, availableStyles } = useWorkflow()
+const router = useRouter()
+
+const { 
+  busy, err, currentStep, needUserInput, questions, answers, 
+  teachingRequest, styleConfig, styleSamples, sessionId, sessionState, outline, 
+  reset, runWorkflow, availableStyles,
+  // V3: 缓存相关
+  stepCache, loadFromCache, hasCache 
+} = useWorkflow()
+
+const outlineGenerator = useOutlineGenerator()
+
+// Monitor outline updates for generator initialization
+watch(outline, (newOutline) => {
+    if (newOutline && newOutline.slides && sessionId.value) {
+        // If we just got a new outline (structure), init the generator
+        // But be careful not to reset if we are already generating
+        // We can check if status is empty
+        if (Object.keys(outlineGenerator.slideStatus).length === 0) {
+            outlineGenerator.initForStructure(newOutline.slides, sessionId.value)
+        }
+    }
+})
+
+// V3: 处理使用缓存的事件
+function handleUseCache(stepId) {
+  console.log('[Module33] 使用缓存:', stepId)
+  
+  if (stepId === '3.1' && hasCache('3.1')) {
+    // 加载 3.1 缓存到当前状态
+    teachingRequest.value = loadFromCache('3.1')
+    currentStep.value = '✅ 已加载 3.1 缓存，可继续执行 3.2 或 3.3'
+  }
+  
+  if (stepId === '3.2' && hasCache('3.2')) {
+    // 加载 3.2 缓存（包含 3.1）
+    if (hasCache('3.1')) {
+      teachingRequest.value = loadFromCache('3.1')
+    }
+    const cache32 = loadFromCache('3.2')
+    styleConfig.value = cache32.styleConfig
+    styleSamples.value = cache32.styleSamples || []
+    currentStep.value = '✅ 已加载 3.1+3.2 缓存，可直接执行 3.3'
+  }
+  
+  if (stepId === '3.3' && hasCache('3.3')) {
+    // 加载 3.3 缓存（包含 3.1+3.2）
+    if (hasCache('3.1')) {
+      teachingRequest.value = loadFromCache('3.1')
+    }
+    if (hasCache('3.2')) {
+      const cache32 = loadFromCache('3.2')
+      styleConfig.value = cache32.styleConfig
+      styleSamples.value = cache32.styleSamples || []
+    }
+    outline.value = loadFromCache('3.3')
+    currentStep.value = '✅ 已加载完整大纲缓存'
+  }
+}
 
 const testCaseList = testCases
 const rawText = ref('')
 const skipStyle = ref(false)
 const styleName = ref('theory_clean')
 
+
+async function runOutline() {
+    if (!rawText.value.trim()) return
+    
+    // Clear previous errors/state
+    err.value = null
+    outline.value = null
+    
+    try {
+        busy.value = true
+        
+        // If no session or not yet at outline stage
+        if (!sessionId.value || !outline.value) {
+           const stopAt = skipStyle.value ? '3.1' : '3.2'
+           
+           // Use composable's runWorkflow which handles session creation
+           await runWorkflow({
+               user_text: rawText.value,
+               answers: answers.value,
+               auto_fill_defaults: true, 
+               stop_at: stopAt
+           })
+           
+           if (needUserInput.value) {
+               busy.value = false
+               return // Wait for user input
+           }
+        }
+        
+        // If we reached here, 3.1/3.2 are done. Start 3.3 parallel generation.
+        await generateParallelOutline()
+        
+    } catch (e) {
+        err.value = e.message
+    } finally {
+        busy.value = false
+    }
+}
+
+async function submitAnswers(useDefaults) {
+    try {
+        busy.value = true
+        const stopAt = skipStyle.value ? '3.1' : '3.2'
+        
+        await runWorkflow({
+            user_text: rawText.value,
+            answers: useDefaults ? {} : answers.value,
+            auto_fill_defaults: useDefaults,
+            stop_at: stopAt
+        })
+        
+        if (needUserInput.value) {
+             busy.value = false
+             return // Still need input (e.g. multi-round)
+        }
+        
+        // If Q&A finished, proceed to generation
+        await generateParallelOutline()
+        
+    } catch (e) {
+        err.value = e.message
+    } finally {
+        busy.value = false
+    }
+}
+
+async function generateParallelOutline() {
+    currentStep.value = 'Phase 2: Generating Outline Structure...'
+    
+    // Call Structure Endpoint
+    const structRes = await api.generateOutlineStructure(sessionId.value, skipStyle.value ? null : styleName.value)
+    
+    if (structRes.ok && structRes.outline) {
+        outline.value = structRes.outline
+        currentStep.value = 'Phase 3: Expanding Details in Parallel...'
+        
+        // Init Generator
+        outlineGenerator.initForStructure(outline.value.slides, sessionId.value)
+        
+        // Run Expansion
+        await outlineGenerator.expandAllSlides(5) // Concurrency 5
+        
+        currentStep.value = '✅ Outline Generation Complete'
+    } else {
+        err.value = structRes.error || 'Structure generation failed'
+    }
+}
+
+async function refreshState() {
+    if(!sessionId.value) return
+    const s = await api.getSession(sessionId.value)
+    if(s) {
+        sessionState.value = s
+        teachingRequest.value = s.teaching_request
+        if(s.style_config) styleConfig.value = s.style_config
+        if(s.outline) outline.value = s.outline
+    }
+}
+
+// Override or redirect the original continueToOutline if needed
+async function continueToOutline() {
+    await runOutline()
+}
+
+// Other existing functions...
 // --- Style Refinement State (3.2交互功能) ---
 const refineText = ref('')
 const refineBusy = ref(false)
@@ -534,64 +737,10 @@ function confirmRefine() {
   // 保留 reasoning，因为已经应用了配置
 }
 
-async function runOutline() {
-  try {
-    const opts = {
-      user_text: rawText.value,
-      stop_at: '3.3'
-    }
-    if (skipStyle.value) {
-      if (!styleName.value) {
-        err.value = '请选择 style_name'
-        return
-      }
-      opts.style_name = styleName.value
-    }
-    await runWorkflow(opts)
-  } catch (e) {
-    err.value = e.message
-  }
-}
 
-async function submitAnswers(useDefaults) {
-  try {
-    const opts = {
-      user_text: rawText.value,
-      answers: useDefaults ? {} : answers,
-      auto_fill_defaults: useDefaults,
-      stop_at: '3.3'
-    }
-    if (skipStyle.value) {
-      if (styleName.value) opts.style_name = styleName.value
-    }
-    await runWorkflow(opts)
-  } catch (e) {
-    err.value = e.message
-  }
-}
 
-// 继续到3.3（当3.2已完成时）
-async function continueToOutline() {
-  try {
-    // 先刷新sessionState，确保获取最新的状态
-    if (sessionId.value) {
-      sessionState.value = await api.getSession(sessionId.value)
-    }
-    
-    // 立即显示3.3状态（必须在调用runWorkflow之前设置，且不会被覆盖）
-    currentStep.value = '3.3 大纲生成中...'
-    
-    // 不传入user_text，只传入stop_at，让后端继续执行3.3
-    // 不传入style_name，使用已有的style_config（完整流程模式）
-    // 添加一个标记，表示这是继续执行3.3，不应该被updateCurrentStepFromSession覆盖
-    const opts = {
-      stop_at: '3.3',
-      _continue_to_3_3: true  // 标记这是继续执行3.3
-    }
-    await runWorkflow(opts)
-  } catch (e) {
-    err.value = e.message
-  }
+function goToOutlineEditor() {
+  router.push('/outline-editor')
 }
 </script>
 
@@ -1000,4 +1149,99 @@ async function continueToOutline() {
 .slide-bullets { padding-left: 16px; margin: 0; flex: 1; }
 .slide-bullets li { margin-bottom: 4px; }
 .slide-notes { margin-top: auto; font-size: 10px; border-top: 1px dashed #ccc; padding-top: 4px; }
+
+/* 2-Stage Workflow Entry Styles */
+.workflow-entry {
+  margin-top: 24px;
+  padding: 24px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid #c7d2fe;
+}
+
+.workflow-hint {
+  font-size: 16px;
+  font-weight: 600;
+  color: #4f46e5;
+  margin-bottom: 16px;
+}
+
+/* Parallel Generation Styles */
+.expansion-progress {
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 8px;
+  border-radius: 8px;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.progress-track {
+  height: 6px;
+  background: #cbd5e1;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #a855f7);
+  transition: width 0.3s ease;
+}
+
+.slide-row-1 {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+}
+
+.slide-status-icon {
+    margin-left: auto;
+    font-size: 14px;
+}
+
+.spin {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+.slide-item.is-loading {
+    background: #f8fafc;
+    border-color: #c7d2fe;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.workflow-btn {
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);
+}
+
+.workflow-btn:hover {
+  background: #4f46e5;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+}
 </style>
