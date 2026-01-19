@@ -49,10 +49,10 @@
       </div>
       
       <div class="row">
-        <button class="primary" @click="runOutline" :disabled="busy || !rawText.trim()">
-          运行大纲生成
+        <button class="primary" @click="runOutline" :disabled="busy || outlineGenerator.isExpanding.value || !rawText.trim()">
+          {{ (busy || outlineGenerator.isExpanding.value) ? '生成中...' : '运行大纲生成' }}
         </button>
-        <button class="btn" @click="reset" :disabled="busy">重置</button>
+        <button class="btn" @click="reset" :disabled="busy || outlineGenerator.isExpanding.value">重置</button>
       </div>
       <div v-if="busy && currentStep" class="progress">⏳ {{ currentStep }}</div>
       <div v-if="err" class="err">❌ {{ err }}</div>
@@ -298,8 +298,8 @@
       <!-- 显示条件：有styleConfig但没有outline，且stage=3.2（完整流程模式） -->
       <div v-if="!outline && currentStyleConfig && (sessionState?.stage === '3.2' || (!sessionState && styleConfig)) && !skipStyle" class="continue-section">
         <div class="continue-hint">✨ 风格配置已生成，可以继续生成大纲</div>
-        <button class="primary continue-btn" @click="continueToOutline" :disabled="busy">
-          {{ busy ? '生成中...' : '继续生成大纲 (3.3)' }}
+        <button class="primary continue-btn" @click="continueToOutline" :disabled="busy || outlineGenerator.isExpanding.value">
+          {{ (busy || outlineGenerator.isExpanding.value) ? '生成中...' : '继续生成大纲 (3.3)' }}
         </button>
       </div>
     </section>
@@ -438,8 +438,6 @@ const styleName = ref('theory_clean')
 
 
 async function runOutline() {
-    if (!rawText.value.trim()) return
-    
     // Clear previous errors/state
     err.value = null
     outline.value = null
@@ -447,22 +445,30 @@ async function runOutline() {
     try {
         busy.value = true
         
-        // If no session or not yet at outline stage
-        if (!sessionId.value || !outline.value) {
-           const stopAt = skipStyle.value ? '3.1' : '3.2'
-           
-           // Use composable's runWorkflow which handles session creation
-           await runWorkflow({
-               user_text: rawText.value,
-               answers: answers.value,
-               auto_fill_defaults: true, 
-               stop_at: stopAt
-           })
-           
-           if (needUserInput.value) {
-               busy.value = false
-               return // Wait for user input
-           }
+        // Check if we need to run 3.1/3.2 first, or just generate outline
+        const needsSetup = !sessionId.value || (!styleConfig.value && !skipStyle.value)
+        
+        if (needsSetup) {
+            // Need rawText for initial setup
+            if (!rawText.value.trim()) {
+                err.value = '请先输入课程需求'
+                return
+            }
+            
+            const stopAt = skipStyle.value ? '3.1' : '3.2'
+            
+            // Use composable's runWorkflow which handles session creation
+            await runWorkflow({
+                user_text: rawText.value,
+                answers: answers.value,
+                auto_fill_defaults: true, 
+                stop_at: stopAt
+            })
+            
+            if (needUserInput.value) {
+                busy.value = false
+                return // Wait for user input
+            }
         }
         
         // If we reached here, 3.1/3.2 are done. Start 3.3 parallel generation.
@@ -515,8 +521,11 @@ async function generateParallelOutline() {
         // Init Generator
         outlineGenerator.initForStructure(outline.value.slides, sessionId.value)
         
-        // Run Expansion
+        // Run Expansion (this updates backend session state)
         await outlineGenerator.expandAllSlides(5) // Concurrency 5
+        
+        // Reload session to get updated outline with bullets
+        await refreshState()
         
         currentStep.value = '✅ Outline Generation Complete'
     } else {

@@ -8,6 +8,37 @@
 
     <ApiConfig />
 
+    <!-- V3: 缓存状态展示 -->
+    <CacheStatus 
+      active-step="3.4" 
+      @use-cache="handleUseCache" 
+    />
+
+    <!-- V3: 缓存已加载提示 -->
+    <section v-if="cacheLoaded && outline" class="card cache-loaded">
+      <div class="h3">✅ 已加载 3.1+3.2+3.3 缓存</div>
+      <div class="cache-info">
+        <div class="info-item">
+          <span class="label">学科：</span>
+          <span class="value">{{ teachingRequest?.subject_info?.subject_name || '未指定' }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">大纲标题：</span>
+          <span class="value">{{ outline?.deck_title || outline?.title || '未命名' }}</span>
+        </div>
+        <div class="info-item">
+          <span class="label">页数：</span>
+          <span class="value">{{ outline?.slides?.length || 0 }} 页</span>
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary" @click="runContentFromCache" :disabled="busy">
+          基于缓存运行内容生成
+        </button>
+      </div>
+      <div v-if="busy && currentStep" class="progress">⏳ {{ currentStep }}</div>
+    </section>
+
     <!-- 输入区 -->
     <section class="card">
       <div class="h3">输入需求（完整流程 3.1→3.2→3.3→3.4）</div>
@@ -99,8 +130,67 @@ import { useWorkflow } from '../composables/useWorkflow'
 import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
+import CacheStatus from '../components/common/CacheStatus.vue'
 
-const { busy, err, currentStep, needUserInput, questions, answers, teachingRequest, styleConfig, outline, deckContent, reset, runWorkflow } = useWorkflow()
+const { 
+  busy, err, currentStep, needUserInput, questions, answers, 
+  teachingRequest, styleConfig, outline, deckContent, 
+  reset, runWorkflow,
+  // V3: 缓存相关
+  stepCache, loadFromCache, hasCache 
+} = useWorkflow()
+
+// V3: 缓存加载状态
+const cacheLoaded = ref(false)
+
+// V3: 处理使用缓存的事件
+function handleUseCache(stepId) {
+  console.log('[Module34] 使用缓存:', stepId)
+  
+  // 加载所有前置步骤的缓存
+  if (stepId === '3.1' && hasCache('3.1')) {
+    teachingRequest.value = loadFromCache('3.1')
+    currentStep.value = '✅ 已加载 3.1 缓存'
+  }
+  
+  if (stepId === '3.2' && hasCache('3.2')) {
+    if (hasCache('3.1')) {
+      teachingRequest.value = loadFromCache('3.1')
+    }
+    const cache32 = loadFromCache('3.2')
+    styleConfig.value = cache32.styleConfig
+    currentStep.value = '✅ 已加载 3.1+3.2 缓存'
+  }
+  
+  if (stepId === '3.3' && hasCache('3.3')) {
+    // 加载完整的前置缓存链: 3.1 + 3.2 + 3.3
+    if (hasCache('3.1')) {
+      teachingRequest.value = loadFromCache('3.1')
+    }
+    if (hasCache('3.2')) {
+      const cache32 = loadFromCache('3.2')
+      styleConfig.value = cache32.styleConfig
+    }
+    outline.value = loadFromCache('3.3')
+    cacheLoaded.value = true
+    currentStep.value = '✅ 已加载 3.1+3.2+3.3 缓存，可直接生成内容'
+  }
+}
+
+// V3: 基于缓存运行内容生成
+async function runContentFromCache() {
+  if (!outline.value) {
+    err.value = '未加载大纲缓存，无法运行'
+    return
+  }
+  try {
+    // 直接调用 3.4，使用已载入的缓存数据
+    await runWorkflow({ stop_at: '3.4' })
+    cacheLoaded.value = false  // 运行后重置状态
+  } catch (e) {
+    err.value = e.message
+  }
+}
 
 const testCaseList = testCases
 const rawText = ref('')
@@ -135,6 +225,11 @@ async function submitAnswers(useDefaults) {
 .card { border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; background: #fff; margin-bottom: 16px; }
 .card.highlight { border-color: #dc2626; border-width: 2px; }
 .card.warn { border-color: #f59e0b55; background: #fffbeb; }
+.card.cache-loaded { border-color: #22c55e; background: #f0fdf4; }
+.cache-info { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; }
+.cache-info .info-item { display: flex; gap: 8px; }
+.cache-info .label { color: #6b7280; font-size: 13px; }
+.cache-info .value { font-weight: 600; font-size: 13px; color: #16a34a; }
 .h3 { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 .textarea { width: 100%; min-height: 80px; border: 1px solid #d1d5db; border-radius: 10px; padding: 10px; font-size: 14px; }
 .row { display: flex; gap: 10px; margin-top: 12px; }
