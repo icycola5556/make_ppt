@@ -496,25 +496,45 @@ async def expand_slide_details(
         slide.bullets = ["(Mock) Point 1", "(Mock) Point 2"]
         return slide
         
-    system_prompt = """
-    你是高职课程内容设计师。请完善单页PPT的详细教学内容。
-    
-    输入上下文：
-    - 课程主题、场景
-    - 当前页标题、类型、设计意图
-    
-    请生成：
-    1. bullets: 3-5个核心要点 (符合slide_type特点)
-    2. assets: 必要的素材占位 (image/chart/icon)
-    3. interactions: 互动设计 (仅当适合时)
-    
-    输出 JSON:
-    {
-      "bullets": ["..."],
-      "assets": [{"type": "...", "theme": "..."}],
-      "interactions": ["..."]
-    }
-    """
+    system_prompt = """<protocol>
+你是高职课程内容设计师（Module 3.3: Slide Expander）。
+
+<zero_empty_slides_policy priority="HIGHEST">
+## 🚨 零空页策略 (Zero Empty Slides)
+
+每个slide的bullets必须至少包含2个要点，绝不允许空列表。
+
+### 页面类型专属填充规则:
+
+| slide_type | 必须包含的内容 |
+|------------|----------------|
+| title, cover | 课程名称、授课人、日期/学期、目标受众 |
+| subtitle, objectives | 本节目标、关键知识点、预计时长 |
+| summary | 核心收获、重点回顾、下节预告 |
+| qa, discussion | 讨论问题、复习要点、拓展思考 |
+| reference | 教材名称、参考资料、学习链接 |
+| concept, principle | 3-6个专业知识要点 |
+| steps, process | 3-5个操作步骤 |
+| case, comparison | 案例背景、分析要点、结论 |
+| warning | 注意事项、常见错误、安全提示 |
+| exercise | 练习题目、评分标准、答案要点 |
+
+### 示例输出:
+**封面页**: ["课程：液压传动原理", "授课：AI助教", "2024年秋季", "面向：机电专业"]
+**章节页**: ["本节目标：理解泵的原理", "重点概念：齿轮泵vs叶片泵", "预计时长：15分钟"]
+**问答页**: ["复习：什么是帕斯卡定律?", "讨论：实际失效案例", "预告：回路设计"]
+</zero_empty_slides_policy>
+
+<output_format>
+{
+  "bullets": ["要点1", "要点2", ...],  // 最少2个，禁止空数组
+  "assets": [{"type": "image|diagram|chart", "theme": "描述主题"}],
+  "interactions": ["互动设计"]
+}
+</output_format>
+</protocol>"""
+
+
     
     user_payload = {
         "context": deck_context,
@@ -526,20 +546,41 @@ async def expand_slide_details(
     }
     
     try:
-        parsed, _ = await llm.chat_json(
+        parsed, meta = await llm.chat_json(
             system_prompt, 
             json.dumps(user_payload, ensure_ascii=False),
-            None # Schema hint implicit
+            '{"bullets": ["string"], "assets": [{"type": "string", "theme": "string"}], "interactions": ["string"]}'
         )
         
-        slide.bullets = parsed.get("bullets", slide.bullets)
-        slide.assets = parsed.get("assets", slide.assets)
-        slide.interactions = parsed.get("interactions", slide.interactions)
+        # Debug logging
+        print(f"[DEBUG] expand_slide {slide.index}: parsed = {parsed}")
+        
+        # Extract bullets with fallback
+        bullets = parsed.get("bullets") if parsed else None
+        if bullets and isinstance(bullets, list) and len(bullets) > 0:
+            slide.bullets = bullets
+        else:
+            # Generate fallback bullets based on slide type and title
+            slide.bullets = [
+                f"关于{slide.title}的核心要点",
+                f"{slide.slide_type}类型页面的说明内容",
+                "详细内容待补充"
+            ]
+            print(f"[DEBUG] expand_slide {slide.index}: using fallback bullets (parsed was empty)")
+        
+        slide.assets = parsed.get("assets", slide.assets) if parsed else slide.assets
+        slide.interactions = parsed.get("interactions", slide.interactions) if parsed else slide.interactions
         
         return slide
         
     except Exception as e:
-        print(f"Error expanding slide {slide.index}: {e}")
+        print(f"[ERROR] expand_slide {slide.index}: {e}")
+        # Provide fallback bullets on error
+        slide.bullets = [
+            f"关于{slide.title}的核心要点",
+            f"{slide.slide_type}类型页面的说明内容",
+            "详细内容待补充"
+        ]
         return slide
 
 # Keep original monolithic function for backward compatibility or direct fallback

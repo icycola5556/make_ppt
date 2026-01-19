@@ -309,10 +309,11 @@ class StyleSampleSlide(BaseModel):
 
 
 class OutlineSlide(BaseModel):
+    """Module 3.3 slide with enforced 'Zero Empty Slides' policy."""
     index: int
     slide_type: str
     title: str
-    bullets: List[str] = Field(default_factory=list)
+    bullets: List[str] = Field(default_factory=list, min_length=2, description="核心要点，至少2个")
     notes: Optional[str] = None
     interactions: List[str] = Field(default_factory=list)
     assets: List[Dict[str, Any]] = Field(default_factory=list, description="placeholders: type/theme/size/style")

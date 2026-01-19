@@ -144,6 +144,29 @@ def get_logs(session_id: str):
     return logger.read_all(session_id)
 
 
+@app.get("/api/slide-types")
+def get_slide_types():
+    """返回幻灯片类型元数据，用于前端展示标签和描述"""
+    slide_types = [
+        {"slide_type": "title", "name": "封面", "description": "课程标题页", "instruction": "展示课程主题和基本信息"},
+        {"slide_type": "cover", "name": "封面", "description": "课程封面页", "instruction": "展示课程主题"},
+        {"slide_type": "objectives", "name": "目标", "description": "教学目标页", "instruction": "列出本次课程的学习目标"},
+        {"slide_type": "concept", "name": "概念", "description": "概念讲解页", "instruction": "讲解核心概念和原理"},
+        {"slide_type": "content", "name": "内容", "description": "内容展示页", "instruction": "展示详细内容"},
+        {"slide_type": "steps", "name": "步骤", "description": "操作步骤页", "instruction": "展示操作流程和步骤"},
+        {"slide_type": "practice", "name": "实践", "description": "实践操作页", "instruction": "展示实操内容"},
+        {"slide_type": "comparison", "name": "对比", "description": "对比分析页", "instruction": "对比不同方案或概念"},
+        {"slide_type": "case", "name": "案例", "description": "案例分析页", "instruction": "展示实际案例"},
+        {"slide_type": "tools", "name": "工具", "description": "工具展示页", "instruction": "展示相关工具或设备"},
+        {"slide_type": "summary", "name": "总结", "description": "课程总结页", "instruction": "总结本次课程要点"},
+        {"slide_type": "bridge", "name": "过渡", "description": "过渡页", "instruction": "连接不同章节"},
+        {"slide_type": "agenda", "name": "议程", "description": "议程页", "instruction": "展示课程安排"},
+        {"slide_type": "qa", "name": "问答", "description": "问答互动页", "instruction": "课堂互动和提问"},
+        {"slide_type": "exercise", "name": "练习", "description": "练习页", "instruction": "展示练习题目"},
+    ]
+    return {"slide_types": slide_types}
+
+
 
 class StyleRefineRequest(BaseModel):
     session_id: str
