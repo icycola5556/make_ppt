@@ -62,7 +62,7 @@ class LLMClient:
         if thinking in ("enabled", "disabled"):
             payload["thinking"] = {"type": thinking}
 
-        async with httpx.AsyncClient(timeout=180.0) as client:
+        async with httpx.AsyncClient(timeout=180.0, proxy=None) as client:
             r = await client.post(url, headers=headers, json=payload)
             r.raise_for_status()
             data = r.json()
@@ -196,7 +196,7 @@ class LLMClient:
             if thinking in ("enabled", "disabled") and not tools:
                 payload["thinking"] = {"type": thinking}
             
-            async with httpx.AsyncClient(timeout=180.0) as client:
+            async with httpx.AsyncClient(timeout=180.0, proxy=None) as client:
                 try:
                     r = await client.post(url, headers=headers, json=payload)
                     r.raise_for_status()

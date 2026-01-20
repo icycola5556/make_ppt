@@ -147,14 +147,23 @@ class WorkflowEngine:
                             "fallback": "disabling_tools"
                         })
                         # 降级到不使用工具的方案
-                        parsed, meta = await self.llm.chat_json(INTENT_SYSTEM_PROMPT, user_text, INTENT_SCHEMA_HINT)
-                        tool_calls = []
-                        self.logger.emit(session_id, "3.1", "llm_response", meta)
-                        req = TeachingRequest.model_validate({"**parsed": parsed})
-                        req.parsing_metadata.raw_input = user_text
-                        req.parsing_metadata.parsing_method = "llm_extraction_fallback"
-                        update_page_distribution(req)
-                        return req
+                        try:
+                            parsed, meta = await self.llm.chat_json(INTENT_SYSTEM_PROMPT, user_text, INTENT_SCHEMA_HINT)
+                            if parsed is None:
+                                raise ValueError("LLM returned None response")
+                            tool_calls = []
+                            self.logger.emit(session_id, "3.1", "llm_response", meta)
+                            req = TeachingRequest.model_validate({**parsed})
+                            req.parsing_metadata.raw_input = user_text
+                            req.parsing_metadata.parsing_method = "llm_extraction_fallback"
+                            update_page_distribution(req)
+                            return req
+                        except Exception as fallback_error:
+                            # 降级方案也失败，将会进入最终的 heuristic fallback
+                            self.logger.emit(session_id, "3.1", "llm_fallback_failed", {
+                                "error": str(fallback_error)
+                            })
+                            raise fallback_error
 
                     # 记录工具调用历史
                     if tool_calls:

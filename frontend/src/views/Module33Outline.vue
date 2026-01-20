@@ -509,14 +509,14 @@ async function submitAnswers(useDefaults) {
 }
 
 async function generateParallelOutline() {
-    currentStep.value = 'Phase 2: Generating Outline Structure...'
+    currentStep.value = '阶段 2: 正在生成大纲结构...'
     
     // Call Structure Endpoint
     const structRes = await api.generateOutlineStructure(sessionId.value, skipStyle.value ? null : styleName.value)
     
     if (structRes.ok && structRes.outline) {
         outline.value = structRes.outline
-        currentStep.value = 'Phase 3: Expanding Details in Parallel...'
+        currentStep.value = '阶段 3: 正在并行扩展详情...'
         
         // Init Generator
         outlineGenerator.initForStructure(outline.value.slides, sessionId.value)
@@ -527,9 +527,9 @@ async function generateParallelOutline() {
         // Reload session to get updated outline with bullets
         await refreshState()
         
-        currentStep.value = '✅ Outline Generation Complete'
+        currentStep.value = '✅ 大纲生成完成'
     } else {
-        err.value = structRes.error || 'Structure generation failed'
+        err.value = structRes.error || '大纲结构生成失败'
     }
 }
 

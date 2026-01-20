@@ -328,7 +328,8 @@ async function runStyleFromCache() {
   }
   try {
     // 直接调用 3.2，使用已载入的 teachingRequest
-    await runWorkflow({ stop_at: '3.2' })
+    // _continue_to_3_2: true 确保状态显示为 "3.2 风格设计中..." 而不是其他
+    await runWorkflow({ stop_at: '3.2', _continue_to_3_2: true })
     cacheLoaded.value = false  // 运行后重置状态
   } catch (e) {
     err.value = e.message

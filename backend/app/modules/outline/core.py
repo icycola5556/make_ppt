@@ -605,12 +605,16 @@ async def generate_outline_structure(
         # Fallback to deterministic
         return generate_outline(req, style_name)
 
-    # 1. Prepare Prompt
-    system_prompt = _get_slide_type_definitions() + "\n\n" + """
+    # 1. Prepare Prompt - Use dynamic target_count from request
+    target_count = req.slide_requirements.target_count or 12
+    min_count = req.slide_requirements.min_count or max(8, target_count - 2)
+    max_count = req.slide_requirements.max_count or (target_count + 2)
+    
+    system_prompt = _get_slide_type_definitions() + "\n\n" + f"""
     你是高职课程PPT大纲规划师。请根据教学需求，快速规划PPT的页面结构。
     
     任务：
-    1. 规划 8-15 页 PPT
+    1. 规划 {target_count} 页 PPT（范围 {min_count}-{max_count} 页，严格遵守目标页数）
     2. 确定每页的 slide_type (必须准确)
     3. 确定每页的 title (简短明确)
     4. 简要说明每页的设计意图 (brief_intent)
@@ -619,12 +623,12 @@ async def generate_outline_structure(
     - 封面(title) -> 目标(objectives) -> 导入(intro) -> 讲解(concept/content) ... -> 总结(summary)
     
     输出 JSON 格式:
-    {
+    {{
       "slides": [
-        {"index": 1, "slide_type": "title", "title": "...", "brief_intent": "..."},
+        {{"index": 1, "slide_type": "title", "title": "...", "brief_intent": "..."}},
         ...
       ]
-    }
+    }}
     """
     
     user_payload = {
@@ -649,15 +653,23 @@ async def generate_outline_structure(
         )
         logger.emit(session_id, "3.3", "structure_generated", meta)
         
-        # 3. Construct PPTOutline (empty details)
+        # 3. Construct PPTOutline (with placeholder bullets to satisfy min_length=2 validation)
         slides_data = parsed.get("slides", [])
         slides = []
         for i, s in enumerate(slides_data, 1):
+            slide_title = s.get("title", f"Page {i}")
+            slide_type = s.get("slide_type", "content")
+            # Provide placeholder bullets to satisfy OutlineSlide.bullets min_length=2 validation
+            # These will be filled with real content by expand_slide_details later
+            placeholder_bullets = [
+                f"关于{slide_title}的核心要点",
+                f"{slide_type}类型页面的说明内容"
+            ]
             slides.append(OutlineSlide(
                 index=i,
-                slide_type=s.get("slide_type", "content"),
-                title=s.get("title", f"Page {i}"),
-                bullets=[], # To be filled
+                slide_type=slide_type,
+                title=slide_title,
+                bullets=placeholder_bullets,  # Placeholder to pass validation
                 notes=s.get("brief_intent", ""),
                 assets=[],
                 interactions=[]
@@ -671,8 +683,8 @@ async def generate_outline_structure(
             slides=slides
         )
         
-        # Adjust count if needed (simplified version of _adjust...)
-        # We trust LLM mostly here for structure
+        # Adjust count to match target (important for user-specified page counts)
+        outline = _adjust_outline_to_target_count(outline, req.slide_requirements.target_count)
         
         return outline
         

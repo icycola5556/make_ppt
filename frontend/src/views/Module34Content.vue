@@ -185,7 +185,8 @@ async function runContentFromCache() {
   }
   try {
     // 直接调用 3.4，使用已载入的缓存数据
-    await runWorkflow({ stop_at: '3.4' })
+    // _continue_to_3_4: true 确保状态显示为 "3.4 内容生成中..." 而不是其他
+    await runWorkflow({ stop_at: '3.4', _continue_to_3_4: true })
     cacheLoaded.value = false  // 运行后重置状态
   } catch (e) {
     err.value = e.message

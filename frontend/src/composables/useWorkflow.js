@@ -255,7 +255,7 @@ export function useWorkflow() {
         }
     }
 
-    async function runWorkflow({ user_text, answers: ans = {}, auto_fill_defaults = false, stop_at = null, style_name = null, _continue_to_3_3 = false }) {
+    async function runWorkflow({ user_text, answers: ans = {}, auto_fill_defaults = false, stop_at = null, style_name = null, _continue_to_3_3 = false, _continue_to_3_2 = false, _continue_to_3_4 = false }) {
         busy.value = true
         err.value = ''
 
@@ -270,6 +270,16 @@ export function useWorkflow() {
                 currentStep.value = '3.3 大纲生成中...'
             }
 
+            // 如果是从3.1缓存继续到3.2，立即设置状态为"3.2 风格设计中..."，不要被覆盖
+            if (_continue_to_3_2 && stop_at === '3.2') {
+                currentStep.value = '3.2 风格设计中...'
+            }
+
+            // 如果是从缓存继续到3.4，立即设置状态为"3.4 内容生成中..."，不要被覆盖
+            if (_continue_to_3_4 && stop_at === '3.4') {
+                currentStep.value = '3.4 内容生成中...'
+            }
+
             // 检查是否是用户点击"确认，开始生成"（final_confirm）
             // 检查answers中是否包含final_confirm字段，且值为"确认"或"开始生成"
             const hasFinalConfirm = ans && ans.final_confirm && (
@@ -280,6 +290,12 @@ export function useWorkflow() {
             // 根据stop_at确定要执行的步骤
             // 如果是从3.2继续到3.3，保持状态为"3.3 大纲生成中..."，不要被覆盖
             if (_continue_to_3_3 && stop_at === '3.3') {
+                // 已经在上面的if中设置了状态，这里保持不动
+                // 不执行任何可能覆盖状态的操作
+            } else if (_continue_to_3_2 && stop_at === '3.2') {
+                // 已经在上面的if中设置了状态，这里保持不动
+                // 不执行任何可能覆盖状态的操作
+            } else if (_continue_to_3_4 && stop_at === '3.4') {
                 // 已经在上面的if中设置了状态，这里保持不动
                 // 不执行任何可能覆盖状态的操作
             } else if (sessionId.value && sessionState.value) {
@@ -307,8 +323,8 @@ export function useWorkflow() {
                 }
             }
 
-            // 如果是从3.2继续到3.3，不要被后续逻辑覆盖状态
-            if (!(_continue_to_3_3 && stop_at === '3.3')) {
+            // 如果是从缓存继续到3.2/3.3/3.4，不要被后续逻辑覆盖状态
+            if (!(_continue_to_3_3 && stop_at === '3.3') && !(_continue_to_3_2 && stop_at === '3.2') && !(_continue_to_3_4 && stop_at === '3.4')) {
                 // 如果用户提交了final_confirm且是完整流程，立即显示3.2状态（无论是否有sessionState）
                 if (hasFinalConfirm && stop_at === '3.3' && !style_name) {
                     currentStep.value = '3.2 风格设计中...'
@@ -420,6 +436,12 @@ export function useWorkflow() {
                 // 如果是从3.2继续到3.3，保持状态为"3.3 大纲生成中..."，不要被覆盖
                 if (_continue_to_3_3 && stop_at === '3.3') {
                     currentStep.value = '3.3 大纲生成中...'
+                } else if (_continue_to_3_2 && stop_at === '3.2') {
+                    // 如果是从3.1缓存继续到3.2，保持状态为"3.2 风格设计中..."，不要被覆盖
+                    currentStep.value = '3.2 风格设计中...'
+                } else if (_continue_to_3_4 && stop_at === '3.4') {
+                    // 如果是从缓存继续到3.4，保持状态为"3.4 内容生成中..."，不要被覆盖
+                    currentStep.value = '3.4 内容生成中...'
                 } else {
                     // 根据响应的stage和sessionState动态设置状态信息
                     const stage = res.stage || sessionState.value?.stage
