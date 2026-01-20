@@ -466,7 +466,20 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
         # 🔴 Key change: Include original bullets in prompt and instruct to preserve them
         original_bullets = slide.bullets if slide.bullets else []
         
-        prompt = f"""请为以下PPT幻灯片生成演讲脚本和视觉建议：
+        # 🎯 Adaptive Density: Determine image count hint based on slide type
+        slide_type_image_hints = {
+            # 0 images: 纯文字页面
+            "title": 0, "cover": 0, "objectives": 0, "agenda": 0, 
+            "summary": 0, "qa": 0, "reference": 0,
+            # 1 image: 标准配图页面
+            "concept": 1, "theory": 1, "steps": 1, "process": 1, 
+            "practice": 1, "case": 1, "warning": 1, "intro": 1,
+            # 2 images: 对比/双主体页面
+            "comparison": 2, "tools": 2, "relations": 2,
+        }
+        image_hint = slide_type_image_hints.get(slide.slide_type, 1)
+        
+        prompt = f"""请为以下PPT幻灯片生成内容，遵循"自适应密度"原则：
 
 {context_info}
 
@@ -475,31 +488,68 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
 - 标题：{slide.title}
 - 原始要点：{json.dumps(original_bullets, ensure_ascii=False)}
 
-🚨 重要规则：
-1. **bullets 必须返回原始要点**，不要改写！只允许适度扩展细节
-2. 生成演讲脚本 (script)：2-4句话，讲师讲解这一页时说的话
-3. 生成视觉建议 (visual_suggestions)：1-3个图片或图表建议
+---
 
-返回JSON格式：
+## 🎯 自适应密度规则 (Adaptive Density)
+
+### 1️⃣ 动态要点 (Dynamic Bullets)
+- **优先保留原始要点**，不要改写核心内容
+- 如果原始要点为空，根据页面复杂度生成 **2-4 个** 关键要点：
+  - 简单页面（封面、目录、总结）：2 个精炼要点即可
+  - 复杂页面（概念讲解、步骤详解）：3-4 个要点
+- 每个要点 **10-20 字**，不要过长
+
+### 2️⃣ 按需配图 (Context-Aware Images)
+根据页面类型决定配图数量，**禁止超过 2 张**：
+
+| 配图数 | 适用场景 | 页面类型示例 |
+|--------|----------|-------------|
+| **0** | 纯文字强化、概念定义、金句引用 | title, cover, objectives, summary, qa |
+| **1** | 标准配置（左文右图） | concept, steps, case, warning |
+| **2** | 对比、冲突、双主体 | comparison, tools |
+
+当前页面类型 `{slide.slide_type}` 建议配图数：**{image_hint}**
+
+### 3️⃣ 视觉建议格式
+如果需要配图，每条建议包含：
+- 图片类型（photo/diagram/icon/chart）
+- 主题描述（15字以内）
+
+---
+
+## 📝 返回JSON格式
+
+```json
 {{
-    "script": "演讲脚本内容",
-    "bullets": {json.dumps(original_bullets, ensure_ascii=False) if original_bullets else '["要点1", "要点2"]'},
-    "visual_suggestions": ["图片建议1", "图片建议2"]
+    "script": "演讲脚本（2-4句话）",
+    "bullets": ["要点1", "要点2"],
+    "image_count": {image_hint},
+    "visual_suggestions": ["建议1", "建议2"]
 }}
+```
+
+**注意**：
+- `bullets` 数组长度 2-4，优先保留原始要点
+- `visual_suggestions` 数组长度必须等于 `image_count`（0/1/2）
 """
         
         logger.emit(req.session_id, "3.4", "slide_generate_start", {
             "slide_index": req.slide_index,
-            "slide_type": slide.slide_type
+            "slide_type": slide.slide_type,
+            "image_hint": image_hint
         })
         
-        # Call LLM with constraint to preserve bullets
-        system_prompt = """你是一位专业的教学内容设计师。
+        # Call LLM with adaptive density constraints
+        system_prompt = """你是一位专业的PPT内容设计师，专注于"少即是多"的设计理念。
 
-🚨 最重要规则：bullets 字段必须保留原始要点内容，只能适度扩展，不能改写或替换！
+## 核心原则
+1. **bullets**: 优先保留原始要点，不要改写；如需新增，控制在 2-4 条
+2. **视觉建议**: 严格按照 `image_count` 字段返回对应数量，绝不超过 2 张图
+3. **精炼表达**: 每条要点 10-20 字，演讲脚本 2-4 句话
 
-请以JSON格式返回。"""
-        json_schema = '''{"script": "string", "bullets": ["string"], "visual_suggestions": ["string"]}'''
+以JSON格式返回，数组长度可变。"""
+        
+        json_schema = '''{"script": "string", "bullets": ["string"], "image_count": 0, "visual_suggestions": ["string"]}'''
         
         result, _meta = await llm.chat_json(
             system=system_prompt,
@@ -508,14 +558,20 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
         )
         
         if not result:
-            # Fallback: use original bullets from outline
+            # Fallback: use original bullets from outline, respect image_hint
+            fallback_visuals = []
+            if image_hint >= 1:
+                fallback_visuals.append(f"diagram: {slide.title}相关示意图")
+            if image_hint >= 2:
+                fallback_visuals.append(f"photo: {slide.title}对比图")
+            
             return SlideContentGenerateResponse(
                 ok=True, 
                 slide_index=req.slide_index, 
                 content=SlideContent(
                     script=f"讲解{slide.title}的核心内容。",
                     bullets=original_bullets if original_bullets else [f"{slide.title}的要点"],
-                    visual_suggestions=[f"建议配图：{slide.title}相关示意图"]
+                    visual_suggestions=fallback_visuals
                 )
             )
         
@@ -524,15 +580,29 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
         if not result_bullets or len(result_bullets) == 0:
             result_bullets = original_bullets if original_bullets else [f"{slide.title}的要点"]
         
+        # 🎯 Enforce bullet limit: max 4 bullets
+        if len(result_bullets) > 4:
+            result_bullets = result_bullets[:4]
+        
+        # 🎯 Enforce image limit: respect image_hint, max 2
+        result_visuals = result.get("visual_suggestions", [])
+        actual_image_count = result.get("image_count", image_hint)
+        actual_image_count = min(actual_image_count, 2)  # Never exceed 2
+        
+        # Trim or pad visual_suggestions to match image_count
+        if len(result_visuals) > actual_image_count:
+            result_visuals = result_visuals[:actual_image_count]
+        
         content = SlideContent(
             script=result.get("script", ""),
             bullets=result_bullets,
-            visual_suggestions=result.get("visual_suggestions", [])
+            visual_suggestions=result_visuals
         )
         
         logger.emit(req.session_id, "3.4", "slide_generate_done", {
             "slide_index": req.slide_index,
-            "bullet_count": len(content.bullets)
+            "bullet_count": len(content.bullets),
+            "image_count": len(content.visual_suggestions)
         })
         
         return SlideContentGenerateResponse(
