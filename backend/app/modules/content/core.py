@@ -1,78 +1,147 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 from ...common.llm_client import LLMClient
 from ...common.logger import WorkflowLogger
-from ...common.schemas import PPTOutline, SlideDeckContent, SlideElement, SlidePage, StyleConfig, TeachingRequest
+from ...common.schemas import PPTOutline, OutlineSlide, SlideDeckContent, SlideElement, SlidePage, StyleConfig, TeachingRequest
 
 
-CONTENT_SYSTEM_PROMPT = """<protocol>
-你是高职教学课件内容生成助手（Module 3.4: Content Expander）。
+# ============================================================================
+# Per-Page Content Generation Prompt (方案B: 逐页生成)
+# ============================================================================
 
-<critical_constraint priority="HIGHEST">
-## 🚨 大纲是唯一真相来源 (Outline = Source of Truth)
+PAGE_CONTENT_SYSTEM_PROMPT = """你是高职课程PPT内容生成助手。
 
-你收到的 `outline.slides[].bullets` 是用户在 Module 3.3 确认的核心要点。
+任务：为PPT的**单个页面**生成详细内容。
 
-### 严格遵守规则:
-1. **禁止添加**: 不要发明 outline.bullets 中不存在的新要点
-2. **禁止删除**: outline 中的每个 bullet 必须在输出中体现
-3. **1:1 映射**: 如果 outline 有 3 个 bullets，输出必须有 3 个 items
+你会收到：
+1. **完整大纲** (full_outline)：整个PPT的结构，帮助你理解上下文
+2. **当前页大纲** (current_page_outline)：这一页的标题、要点、类型
+3. **教学需求** (teaching_request)：课程背景信息
+4. **基础页面** (base_page)：布局参考（可选）
 
-### 你的唯一任务:
-- 为每个 bullet 生成扩展说明（1-2句话）
-- 基于 bullet 内容建议视觉素材
-- 生成演讲备注（speaker_notes）
-</critical_constraint>
+输出：这一页的完整 SlidePage（JSON格式）
 
-<design_philosophy>
-- 教学效果驱动：优先考虑内容的教学效果
-- 学生认知适配：根据高职学生的认知特点设计内容密度
-- 实践应用导向：强调实用技能和实际操作能力
-</design_philosophy>
+---
 
-<content_rules>
-1. 精准表达：使用高职学生熟悉的语言和专业术语
-2. 逻辑递进：遵循从基础到应用的认知规律
-3. 视觉化支持：为抽象概念提供适当的可视化占位
-</content_rules>
+🚨🚨🚨 **通用规则** 🚨🚨🚨
 
-<visual_logic>
-只在以下情况添加图片占位:
-- slide_type 为 "concept", "steps", "comparison" 时添加示意图
-- slide_type 为 "case" 时添加案例图片
-- 其他类型默认不添加图片，除非 outline.assets 明确要求
-</visual_logic>
+**current_page_outline.bullets 是你的内容来源！**
+- 不要自己发明新内容
+- 根据 slide_type 决定处理策略
 
-<layout_guide aspect_ratio="16:9">
+---
+
+## 📋 各页面类型处理规则
+
+### 🔴 exercises / quiz（习题页）—— 特殊处理！
+
+**输出 type="quiz" 元素，包含结构化的题目+答案：**
+
+```json
+{
+  "type": "quiz",
+  "content": {
+    "questions": [
+      {"question": "题目1原文", "answer": "该题目的参考答案"},
+      {"question": "题目2原文", "answer": "该题目的参考答案"}
+    ],
+    "scoring": "评分标准原文（如有）"
+  }
+}
+```
+
+**规则**：
+- `question` 字段：100% 保留大纲中的题目原文
+- `answer` 字段：根据题目内容生成合理的参考答案
+- `scoring` 字段：保留评分标准原文
+
+---
+
+### 🔴 其他必须保留的类型：
+
+#### objectives / agenda（教学目标页）
+- **100% 保留目标条目**，不要改写
+
+#### summary（总结页）
+- **保留原始总结要点**
+
+#### warning（注意事项页）
+- **保留所有警告/注意事项**
+
+---
+
+### 🟡 可以适度扩展的类型：
+
+#### concept / theory（概念讲解页）
+- 可扩展为更详细描述，每条 15-25 字
+- 可添加右侧示意图
+
+#### steps / practice（操作步骤页）
+- **保留步骤编号和顺序**，可补充细节
+
+---
+
+## 📐 页面元素定位（16:9画布）
+
 - 标题区：x=0.06, y=0.06, w=0.88, h=0.12
-- 主内容区：x=0.06, y=0.20, w=0.60, h=0.72
-- 右侧可视化区：x=0.70, y=0.20, w=0.24, h=0.72
-- 页脚备注区：x=0.06, y=0.92, w=0.88, h=0.06
-</layout_guide>
+- 内容区：x=0.06, y=0.20, w=0.88, h=0.72
 
-<fill_in_the_blank_rule priority="CRITICAL">
-如果你看到 outline bullet 是一个填空题或占位符 (例如 "题目1: ____", "关键连接: ____", "图表: ____"):
-1. **必须保留前缀**: 必须保留 "题目1:", "关键连接:" 等结构前缀
-2. **填空逻辑**: 根据上下文生成具体内容填入空格 `____` 部分
-3. **禁止替换**: 绝对不要把 "题目1: ____" 替换成 "理解PLC基本结构" 这种通用陈述
-4. **一一对应**: 输入有几个 bullet，输出必须有几个 item，数量严格一致
-</fill_in_the_blank_rule>
+---
 
-<slide_types>
-cover=封面 | agenda=目录 | objectives=目标 | intro=导入 | concept=概念 | 
-steps=步骤 | warning=注意 | exercises=练习 | summary=总结 | 
-relations=联系 | bridge=过渡 | qa=问答 | case=案例 | comparison=对比
-</slide_types>
-</protocol>
+## 📝 exercises 完整示例
 
-<output_format>
-输出严格JSON格式，符合SlideDeckContent schema。
-页面数量必须与outline.slides数量完全一致。
-</output_format>"""
+**输入**：
+```json
+{
+  "slide_type": "exercises",
+  "title": "习题巩固",
+  "bullets": [
+    "题目1：简述液压传动系统的工作原理，并说明帕斯卡定律的作用",
+    "题目2：列出三种常见液压泵的类型并比较其适用场合",
+    "评分标准：概念准确40%、逻辑清晰30%、术语规范30%"
+  ]
+}
+```
+
+**✅ 正确输出**：
+```json
+{
+  "index": 12,
+  "slide_type": "exercises",
+  "title": "习题巩固",
+  "layout": {"template": "one-column"},
+  "elements": [
+    {"id": "title-001", "type": "text", "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.12, 
+     "content": {"text": "习题巩固", "role": "title"}, "style": {"role": "title"}},
+    {"id": "quiz-001", "type": "quiz", "x": 0.06, "y": 0.20, "w": 0.88, "h": 0.72,
+     "content": {
+       "questions": [
+         {
+           "question": "题目1：简述液压传动系统的工作原理，并说明帕斯卡定律的作用",
+           "answer": "液压传动通过密闭容积内液体传递动力，将机械能转换为液压能再转换回机械能。帕斯卡定律指出静止液体中任一点的压强向各方向相等传递，使系统能够实现力的放大和远程传递。"
+         },
+         {
+           "question": "题目2：列出三种常见液压泵的类型并比较其适用场合",
+           "answer": "①齿轮泵：结构简单、价格低，适用于低压大流量场合；②叶片泵：输出流量平稳，适用于中压精密控制系统；③柱塞泵：压力高、效率高，适用于高压重载系统。"
+         }
+       ],
+       "scoring": "概念准确40%、逻辑清晰30%、术语规范30%"
+     }, "style": {"role": "body"}}
+  ],
+  "speaker_notes": "引导学生先独立思考，5分钟后点击显示答案进行讲解。"
+}
+```
+
+只输出这一页的 SlidePage JSON，不要解释。"""
+
+
+# Legacy batch prompt (kept for reference, not used in new implementation)
+CONTENT_SYSTEM_PROMPT = PAGE_CONTENT_SYSTEM_PROMPT
 
 
 
@@ -198,6 +267,7 @@ def build_base_deck(req: TeachingRequest, style: StyleConfig, outline: PPTOutlin
 
 
 def _chunk_pages(pages: List[SlidePage], size: int) -> List[List[SlidePage]]:
+    """Legacy helper - kept for backward compatibility."""
     out: List[List[SlidePage]] = []
     buf: List[SlidePage] = []
     for p in pages:
@@ -210,6 +280,133 @@ def _chunk_pages(pages: List[SlidePage], size: int) -> List[List[SlidePage]]:
     return out
 
 
+# ============================================================================
+# Per-Page Content Generation (方案B核心实现)
+# ============================================================================
+
+async def _generate_single_page(
+    session_id: str,
+    llm: LLMClient,
+    logger: WorkflowLogger,
+    req: TeachingRequest,
+    style: StyleConfig,
+    full_outline: PPTOutline,
+    page_outline: OutlineSlide,
+    base_page: SlidePage,
+    page_index: int,
+    total_pages: int,
+) -> SlidePage:
+    """Generate content for a single page with full outline context.
+    
+    This is the core of Plan B: each page receives:
+    1. full_outline: The complete PPT outline for context
+    2. page_outline: The specific page's outline (title, bullets, type)
+    3. base_page: Layout reference (optional)
+    """
+    
+    # 🚨 Special handling for exercises/quiz pages
+    # Skip LLM and preserve original questions to prevent rewriting
+    if page_outline.slide_type in ("exercises", "quiz") and page_outline.bullets:
+        print(f"[DEBUG] 3.4 generate_page {page_index}: SKIPPING LLM for exercises (preserving {len(page_outline.bullets)} questions)")
+        
+        # Build page directly from outline bullets
+        elements = [
+            {
+                "id": "title-001",
+                "type": "text",
+                "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.12,
+                "content": {"text": page_outline.title, "role": "title"},
+                "style": {"role": "title"}
+            },
+            {
+                "id": "bullets-001",
+                "type": "bullets",
+                "x": 0.06, "y": 0.20, "w": 0.88, "h": 0.72,
+                "content": {"items": page_outline.bullets},
+                "style": {"role": "body"}
+            }
+        ]
+        
+        return SlidePage(
+            index=page_index,
+            slide_type=page_outline.slide_type,
+            title=page_outline.title,
+            layout={"template": "one-column"},
+            elements=elements,
+            speaker_notes=f"习题页：请学生先独立完成后再讲解答案。"
+        )
+    
+    schema_hint = SlidePage.model_json_schema()
+    
+    # Build context-rich user message
+    user_payload = {
+        "teaching_request": {
+            "subject": req.subject,
+            "professional_category": req.professional_category,
+            "teaching_scene": req.teaching_scene,
+            "knowledge_points": req.kp_names,
+        },
+        "full_outline": {
+            "deck_title": full_outline.deck_title,
+            "total_pages": total_pages,
+            "slides_summary": [
+                {"index": s.index, "title": s.title, "type": s.slide_type}
+                for s in full_outline.slides
+            ],
+        },
+        "current_page": {
+            "index": page_index,
+            "position": f"第 {page_index} 页 / 共 {total_pages} 页",
+        },
+        "current_page_outline": page_outline.model_dump(mode="json"),
+        "base_page": base_page.model_dump(mode="json"),
+        "style_theme": style.style_name,
+    }
+    
+    user_msg = json.dumps(user_payload, ensure_ascii=False)
+    
+    logger.emit(session_id, "3.4", "llm_page_prompt", {
+        "page_index": page_index,
+        "slide_type": page_outline.slide_type,
+        "title": page_outline.title,
+    })
+    
+    try:
+        parsed, meta = await llm.chat_json(
+            PAGE_CONTENT_SYSTEM_PROMPT,
+            user_msg,
+            json.dumps(schema_hint, ensure_ascii=False)
+        )
+        logger.emit(session_id, "3.4", "llm_page_response", {
+            "page_index": page_index,
+            **meta
+        })
+        
+        # Debug: Log LLM response for exercises pages
+        if page_outline.slide_type in ("exercises", "quiz"):
+            print(f"\n=== DEBUG: LLM 响应 (index={page_index}) ===")
+            elements = parsed.get("elements", [])
+            for el in elements:
+                if el.get("type") in ("quiz", "bullets"):
+                    print(f"Element type: {el.get('type')}")
+                    print(f"Content: {el.get('content')}")
+            print("=" * 50)
+        
+        refined_page = SlidePage.model_validate(parsed)
+        
+        # Ensure index is preserved
+        refined_page.index = page_index
+        return refined_page
+        
+    except Exception as e:
+        logger.emit(session_id, "3.4", "llm_page_error", {
+            "page_index": page_index,
+            "error": str(e)
+        })
+        # Fallback to base page
+        return base_page
+
+
 async def refine_with_llm(
     session_id: str,
     llm: LLMClient,
@@ -219,45 +416,71 @@ async def refine_with_llm(
     outline: PPTOutline,
     base: SlideDeckContent,
 ) -> SlideDeckContent:
-    """Refine base pages with LLM. Falls back to base if anything fails."""
-
+    """Refine base pages with LLM using per-page generation (Plan B).
+    
+    Each page is generated independently with full outline context,
+    enabling better contextual understanding and proper handling of
+    special page types like exercises, steps, and quizzes.
+    
+    Falls back to base if anything fails.
+    """
     if not llm.is_enabled():
         return base
 
-    schema_hint = SlideDeckContent.model_json_schema()
-
-    # Keep prompts bounded: refine in batches.
-    batch_size = 6 if len(base.pages) > 10 else len(base.pages)
-    refined_pages: List[SlidePage] = []
-    for batch in _chunk_pages(base.pages, batch_size):
-        user_payload = {
-            "teaching_request": req.model_dump(mode="json"),
-            "style_config": style.model_dump(mode="json"),
-            "outline": outline.model_dump(mode="json"),
-            "base_pages": [p.model_dump(mode="json") for p in batch],
-        }
-        user_msg = json.dumps(user_payload, ensure_ascii=False)
-
-        logger.emit(session_id, "3.4", "llm_prompt", {"system": CONTENT_SYSTEM_PROMPT, "user": user_payload, "schema_hint": schema_hint})
-
-        try:
-            parsed, meta = await llm.chat_json(CONTENT_SYSTEM_PROMPT, user_msg, json.dumps(schema_hint, ensure_ascii=False))
-            logger.emit(session_id, "3.4", "llm_response", meta)
-            deck = SlideDeckContent.model_validate(parsed)
-
-            # Only take the refined pages that correspond to this batch indexes
-            refined_pages.extend(deck.pages)
-        except Exception as e:
-            logger.emit(session_id, "3.4", "llm_error", {"error": str(e)})
-            refined_pages.extend(batch)
-
-    # Sort and validate alignment with outline
-    refined_pages = sorted(refined_pages, key=lambda p: p.index)
-    if len(refined_pages) != len(outline.slides):
-        # If mismatch, keep base to be safe
+    total_pages = len(outline.slides)
+    logger.emit(session_id, "3.4", "per_page_start", {
+        "total_pages": total_pages,
+        "generation_mode": "per-page-parallel"
+    })
+    
+    # Create tasks for parallel generation
+    tasks = []
+    for slide_outline, base_page in zip(outline.slides, base.pages):
+        task = _generate_single_page(
+            session_id=session_id,
+            llm=llm,
+            logger=logger,
+            req=req,
+            style=style,
+            full_outline=outline,
+            page_outline=slide_outline,
+            base_page=base_page,
+            page_index=slide_outline.index,
+            total_pages=total_pages,
+        )
+        tasks.append(task)
+    
+    # Run all pages in parallel
+    refined_pages = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Handle any exceptions - replace with base pages
+    final_pages: List[SlidePage] = []
+    for i, result in enumerate(refined_pages):
+        if isinstance(result, BaseException):
+            logger.emit(session_id, "3.4", "page_fallback", {
+                "page_index": i + 1,
+                "reason": str(result)
+            })
+            final_pages.append(base.pages[i])
+        else:
+            # Result is SlidePage
+            final_pages.append(result)
+    
+    # Sort by index and validate
+    final_pages = sorted(final_pages, key=lambda p: p.index)
+    
+    if len(final_pages) != len(outline.slides):
+        logger.emit(session_id, "3.4", "validation_failed", {
+            "expected": len(outline.slides),
+            "got": len(final_pages)
+        })
         return base
-
-    return SlideDeckContent(deck_title=outline.deck_title, pages=refined_pages)
+    
+    logger.emit(session_id, "3.4", "per_page_complete", {
+        "total_pages": len(final_pages)
+    })
+    
+    return SlideDeckContent(deck_title=outline.deck_title, pages=final_pages)
 
 
 def validate_deck(outline: PPTOutline, deck: SlideDeckContent) -> Tuple[bool, List[str]]:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import uuid
 import time
+import json
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -405,10 +406,8 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
     """
     Generate detailed content for a single slide (Phase 2 - Async Generation).
     
-    This endpoint is called in parallel for each slide to generate:
-    - Speaker script
-    - Detailed bullet points  
-    - Visual suggestions
+    This endpoint uses 3.3's outline output as input for 3.4's content generation.
+    For exercises pages, original questions from outline are preserved.
     """
     try:
         state = store.load(req.session_id)
@@ -429,9 +428,24 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
         
         slide = state.outline.slides[req.slide_index]
         
+        # 🚨 Special handling for exercises/quiz pages
+        # Preserve original questions from 3.3 outline, don't call LLM
+        if slide.slide_type in ("exercises", "quiz") and slide.bullets:
+            print(f"[DEBUG] 3.4 generate_slide {req.slide_index}: SKIPPING LLM for exercises (preserving {len(slide.bullets)} questions)")
+            
+            # Return content directly from outline bullets
+            content = SlideContent(
+                script=f"请学生独立完成以下练习题，完成后进行讲解。",
+                bullets=slide.bullets,  # Preserve original questions!
+                visual_suggestions=[f"建议配图：{slide.title}相关的评分表或题目展示图"]
+            )
+            return SlideContentGenerateResponse(
+                ok=True, slide_index=req.slide_index, content=content
+            )
+        
         # Check if LLM is enabled
         if not llm.is_enabled():
-            # Return mock content when LLM is disabled
+            # Return content based on outline when LLM is disabled
             mock_content = SlideContent(
                 script=f"讲解{slide.title}的核心内容，确保学生理解关键概念。",
                 bullets=slide.bullets if slide.bullets else [f"{slide.title}的要点1", f"{slide.title}的要点2"],
@@ -441,36 +455,35 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
                 ok=True, slide_index=req.slide_index, content=mock_content
             )
         
-        # Build prompt for single slide content generation
+        # For other page types, use LLM to enhance content
+        # But still preserve the outline's bullets as the source of truth
         context_info = f"""
 课程主题：{state.outline.deck_title}
 知识点：{', '.join(state.outline.knowledge_points)}
 教学场景：{state.outline.teaching_scene}
 """
         
-        prompt = f"""请为以下PPT幻灯片生成详细内容：
+        # 🔴 Key change: Include original bullets in prompt and instruct to preserve them
+        original_bullets = slide.bullets if slide.bullets else []
+        
+        prompt = f"""请为以下PPT幻灯片生成演讲脚本和视觉建议：
 
 {context_info}
 
 当前幻灯片 (第 {req.slide_index + 1}/{len(state.outline.slides)} 页)：
 - 类型：{slide.slide_type}
 - 标题：{slide.title}
-- 要点：{', '.join(slide.bullets) if slide.bullets else '无'}
+- 原始要点：{json.dumps(original_bullets, ensure_ascii=False)}
 
-请生成：
-1. **演讲脚本** (speaker script)：2-4句话，讲师讲解这一页时说的话
-2. **详细要点** (bullets)：3-5个详细的知识点，每个10-20字
-3. **视觉建议** (visual_suggestions)：1-3个图片或图表建议
-
-要求：
-- 内容专业、准确、适合教学
-- 语言简洁清晰
-- 视觉建议要具体可执行
+🚨 重要规则：
+1. **bullets 必须返回原始要点**，不要改写！只允许适度扩展细节
+2. 生成演讲脚本 (script)：2-4句话，讲师讲解这一页时说的话
+3. 生成视觉建议 (visual_suggestions)：1-3个图片或图表建议
 
 返回JSON格式：
 {{
     "script": "演讲脚本内容",
-    "bullets": ["要点1", "要点2", "要点3"],
+    "bullets": {json.dumps(original_bullets, ensure_ascii=False) if original_bullets else '["要点1", "要点2"]'},
     "visual_suggestions": ["图片建议1", "图片建议2"]
 }}
 """
@@ -480,8 +493,12 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
             "slide_type": slide.slide_type
         })
         
-        # Call LLM
-        system_prompt = "你是一位专业的教学内容设计师，擅长为PPT幻灯片生成详细的教学内容。请以JSON格式返回。"
+        # Call LLM with constraint to preserve bullets
+        system_prompt = """你是一位专业的教学内容设计师。
+
+🚨 最重要规则：bullets 字段必须保留原始要点内容，只能适度扩展，不能改写或替换！
+
+请以JSON格式返回。"""
         json_schema = '''{"script": "string", "bullets": ["string"], "visual_suggestions": ["string"]}'''
         
         result, _meta = await llm.chat_json(
@@ -491,13 +508,25 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
         )
         
         if not result:
+            # Fallback: use original bullets from outline
             return SlideContentGenerateResponse(
-                ok=False, slide_index=req.slide_index, error="LLM returned empty response"
+                ok=True, 
+                slide_index=req.slide_index, 
+                content=SlideContent(
+                    script=f"讲解{slide.title}的核心内容。",
+                    bullets=original_bullets if original_bullets else [f"{slide.title}的要点"],
+                    visual_suggestions=[f"建议配图：{slide.title}相关示意图"]
+                )
             )
+        
+        # If LLM didn't return proper bullets, use original from outline
+        result_bullets = result.get("bullets", [])
+        if not result_bullets or len(result_bullets) == 0:
+            result_bullets = original_bullets if original_bullets else [f"{slide.title}的要点"]
         
         content = SlideContent(
             script=result.get("script", ""),
-            bullets=result.get("bullets", []),
+            bullets=result_bullets,
             visual_suggestions=result.get("visual_suggestions", [])
         )
         
