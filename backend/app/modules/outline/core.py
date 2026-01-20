@@ -49,6 +49,180 @@ def _deck_title(req: TeachingRequest) -> str:
     return "知识点课件"
 
 
+def _get_current_semester() -> str:
+    """获取当前学期（示例实现）"""
+    import datetime
+    now = datetime.datetime.now()
+    year = now.year
+    month = now.month
+    if month >= 9:
+        return f"{year}年秋季学期"
+    elif month >= 3:
+        return f"{year}年春季学期"
+    else:
+        return f"{year-1}年秋季学期"
+
+
+def _get_tools_for_practice(kp: str, subject: str) -> str:
+    """根据知识点和学科返回具体工具"""
+    kp_lower = kp.lower()
+    subject_lower = subject.lower() if subject else ""
+
+    if "液压" in kp or "液压" in subject_lower:
+        return "液压泵、液压缸、压力表、扳手、液压油、密封件"
+    elif "plc" in kp_lower or "电气" in kp or "电气" in subject_lower:
+        return "PLC编程器、万用表、螺丝刀、接线工具、继电器"
+    elif "机械" in kp or "机械" in subject_lower or "车" in kp or "铣" in kp:
+        return "车床/铣床、游标卡尺、千分尺、刀具、工件"
+    elif "焊接" in kp or "焊" in subject_lower:
+        return "焊机、焊条、防护面罩、焊接手套、角磨机"
+    elif "汽车" in kp or "汽车" in subject_lower or "发动机" in kp:
+        return "发动机、万用表、故障诊断仪、扳手套装、机油"
+    elif "网络" in kp or "网络" in subject_lower or "路由" in kp:
+        return "路由器、交换机、网线、测线仪、压线钳"
+    elif "编程" in kp or "程序" in kp or "代码" in kp:
+        return "计算机、开发环境、调试工具、代码编辑器"
+    else:
+        return "相关实训工具、安全防护用品、测量工具"
+
+
+def _get_safety_check(kp: str, subject: str) -> str:
+    """根据知识点返回安全检查内容"""
+    kp_lower = kp.lower()
+    subject_lower = subject.lower() if subject else ""
+
+    if "液压" in kp or "液压" in subject_lower:
+        return "检查油箱液位、确认管路无泄漏、穿戴防护眼镜"
+    elif "plc" in kp_lower or "电气" in kp:
+        return "确认断电状态、检查绝缘工具、穿戴绝缘手套"
+    elif "机械" in kp or "车" in kp or "铣" in kp:
+        return "检查机床安全防护装置、穿戴防护眼镜、固定工件"
+    elif "焊接" in kp or "焊" in subject_lower:
+        return "佩戴焊接面罩、穿戴防护服、确认通风良好"
+    elif "汽车" in kp or "发动机" in kp:
+        return "确认车辆稳固、关闭点火开关、准备灭火器"
+    else:
+        return "检查设备状态、穿戴防护用品、确认环境安全"
+
+
+def _get_step_action(step_num: int, kp: str) -> str:
+    """生成步骤的具体操作"""
+    kp_lower = kp.lower()
+
+    if step_num == 1:
+        if "液压" in kp:
+            return "操作要点：检查油箱液位在MIN-MAX之间，启动液压泵；质量要点：压力表读数稳定在额定范围"
+        elif "plc" in kp_lower:
+            return "操作要点：连接PLC与编程器，上传梯形图程序；质量要点：程序上传成功无报错"
+        else:
+            return "操作要点：按规范启动设备，观察运行状态；质量要点：设备运行平稳无异常"
+    elif step_num == 2:
+        if "液压" in kp:
+            return "操作要点：调节溢流阀至8-10MPa，观察压力变化；质量要点：系统压力稳定"
+        elif "plc" in kp_lower:
+            return "操作要点：设置输入输出参数，运行调试程序；质量要点：输出信号正确响应"
+        else:
+            return "操作要点：按工艺要求调整参数，进行试运行；质量要点：参数在标准范围内"
+    elif step_num == 3:
+        if "液压" in kp:
+            return "操作要点：测试液压缸动作，记录行程时间；质量要点：动作流畅，时间符合要求"
+        elif "plc" in kp_lower:
+            return "操作要点：进行联机测试，验证控制逻辑；质量要点：各环节动作准确"
+        else:
+            return "操作要点：完成标准操作流程，检查成品质量；质量要点：符合验收标准"
+    else:
+        return f"操作要点：完成第{step_num}步标准操作；质量要点：达到工艺要求"
+
+
+def _get_risk_warning(kp: str, subject: str) -> str:
+    """生成高风险点"""
+    kp_lower = kp.lower()
+    subject_lower = subject.lower() if subject else ""
+
+    if "液压" in kp or "液压" in subject_lower:
+        return "高压油喷出可能导致伤害，务必戴防护眼镜"
+    elif "plc" in kp_lower or "电气" in kp:
+        return "带电操作可能触电，必须确认断电后再接线"
+    elif "焊接" in kp:
+        return "焊接弧光伤眼，必须佩戴焊接面罩"
+    elif "机械" in kp or "车" in kp:
+        return "旋转部件易夹伤，禁止戴手套操作"
+    else:
+        return "操作不当可能导致设备损坏或人身伤害"
+
+
+def _get_common_mistake(kp: str) -> str:
+    """生成常见错误"""
+    kp_lower = kp.lower()
+
+    if "液压" in kp:
+        return "忘记检查油位导致泵空转损坏"
+    elif "plc" in kp_lower:
+        return "接线错误导致输出信号不正确"
+    elif "焊接" in kp:
+        return "焊接电流过大导致焊穿"
+    else:
+        return "操作步骤顺序错误导致结果不准确"
+
+
+def _get_correction_method(kp: str) -> str:
+    """生成纠正方法"""
+    kp_lower = kp.lower()
+
+    if "液压" in kp:
+        return "操作前必须按检查表逐项确认"
+    elif "plc" in kp_lower:
+        return "接线后先用万用表测试再通电"
+    elif "焊接" in kp:
+        return "根据板厚查表选择合适电流"
+    else:
+        return "严格按照操作规程逐步执行"
+
+
+def _generate_exercise_question(kp: str, subject: str, q_num: int) -> str:
+    """生成具体的练习题"""
+    kp_lower = kp.lower()
+    subject_lower = subject.lower() if subject else ""
+
+    if q_num == 1:
+        if "液压" in kp or "液压" in subject_lower:
+            return "选择题：液压泵的主要作用是（ ） A.储存液压油 B.转换能量 C.控制压力 D.过滤杂质"
+        elif "plc" in kp_lower:
+            return "选择题：PLC的输入端子通常接（ ） A.执行器 B.传感器 C.电源 D.地线"
+        elif "焊接" in kp:
+            return "选择题：焊接电流过大会导致（ ） A.焊不透 B.焊穿 C.夹渣 D.气孔"
+        else:
+            return f"选择题：关于{kp}的基本概念，下列说法正确的是（ ）"
+    elif q_num == 2:
+        if "液压" in kp or "液压" in subject_lower:
+            return f"填空题：液压系统的三大组成部分是动力元件、_____和辅助元件"
+        elif "plc" in kp_lower:
+            return "填空题：梯形图中，常开触点的符号是_____，常闭触点的符号是_____"
+        else:
+            return f"填空题：{kp}的核心要素包括_____、_____和_____"
+    elif q_num == 3:
+        if "液压" in kp or "液压" in subject_lower:
+            return "简答题：说明液压缸推力不足的可能原因及排查方法"
+        elif "plc" in kp_lower:
+            return "简答题：说明PLC程序调试的基本步骤"
+        else:
+            return f"简答题：说明{kp}在实际应用中的注意事项"
+    else:
+        return f"题目{q_num}：请根据所学知识，分析{kp}的实际应用"
+
+
+def _generate_key_points(kp: str, point_num: int) -> str:
+    """生成知识点的要点"""
+    if point_num == 1:
+        return f"理解{kp}的基本定义和组成要素"
+    elif point_num == 2:
+        return f"掌握{kp}的工作原理和特点"
+    elif point_num == 3:
+        return f"能够分析{kp}在实际中的应用场景"
+    else:
+        return f"要点{point_num}：{kp}的相关知识"
+
+
 
 def _build_outline_planning_prompt() -> str:
     """构建大纲规划系统提示词，动态包含slide_type定义"""
@@ -164,8 +338,8 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
         "title",  # 使用slide_type.json中定义的"title"类型
         f"{subj}：{title}",
         [
-            "授课人：_____",
-            "时间：_____",
+            "授课人：待编辑（可在前端修改）",
+            f"时间：{_get_current_semester()}",
             f"教学场景：{req.teaching_scene}",
         ],
         notes="封面信息可在前端编辑区直接改。",
@@ -185,13 +359,14 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
 
     # Scene-specific templates
     if req.teaching_scene == "practice":
+        first_kp = kps[0] if kps else "本知识点"
         add(
             "mapping",
             "知识点与实训任务对应",
             [
-                "本次实训任务：_____",
+                f"本次实训任务：{first_kp}的实训操作与检测",
                 "对应知识点：" + "、".join(kps),
-                "达标标准：_____",
+                "达标标准：能够独立完成操作，结果符合工艺要求",
             ],
             assets=[{"type": "diagram", "theme": "knowledge_to_task_mapping", "size": "16:9"}],
         )
@@ -199,9 +374,9 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
             "prep",
             "实训准备",
             [
-                "工具/材料：_____",
-                "安全检查：_____",
-                "环境要求：_____",
+                f"工具/材料：{_get_tools_for_practice(first_kp, req.subject or '')}",
+                f"安全检查：{_get_safety_check(first_kp, req.subject or '')}",
+                "环境要求：通风良好、照明充足、工位整洁",
             ],
             assets=[{"type": "icon", "theme": "tools_and_safety", "size": "1:1"}],
         )
@@ -212,18 +387,17 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
                 "steps",
                 f"实训步骤 {i}",
                 [
-                    f"操作要点：步骤{i}的关键动作/顺序",
-                    "质量要点：如何判断做对了",
-                    "对应知识点：_____",
+                    _get_step_action(i, first_kp),
+                    f"对应知识点：{first_kp}",
                 ],
                 assets=[{"type": "image", "theme": f"practice_step_{i}", "size": "16:9"}],
             )
 
         warn_title = "注意事项 / 警示" if req.warning_mark else "注意事项"
         warn_bullets = [
-            "高风险点：_____",
-            "常见错误：_____",
-            "纠正方法：_____",
+            f"高风险点：{_get_risk_warning(first_kp, req.subject or '')}",
+            f"常见错误：{_get_common_mistake(first_kp)}",
+            f"纠正方法：{_get_correction_method(first_kp)}",
         ]
         interactions = ["随堂提问：你认为最容易出错的步骤是？"] if req.include_interaction else []
         add(
@@ -239,16 +413,17 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
                 "exercises",
                 "实训巩固 / 自测",
                 [
-                    "自测题1：_____",
-                    "自测题2：_____",
-                    "评分要点：_____",
+                    _generate_exercise_question(first_kp, req.subject or "", 1),
+                    _generate_exercise_question(first_kp, req.subject or "", 2),
+                    f"评分要点：操作规范性、结果准确性、安全意识",
                 ],
                 interactions=["学员提交：拍照/勾选完成情况"] if req.include_interaction else [],
             )
 
-        add("summary", "实训总结", ["本次实训关键点回顾", "常见问题与改进建议", "拓展任务：_____"], notes="可追加作业或拓展练习。")
+        add("summary", "实训总结", ["本次实训关键点回顾", "常见问题与改进建议", f"拓展任务：尝试{first_kp}的变式操作"], notes="可追加作业或拓展练习。")
 
     elif req.teaching_scene == "review":
+        first_kp = kps[0] if kps else "本知识点"
         add(
             "agenda",
             "复习路线",
@@ -261,7 +436,7 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
         add(
             "relations",
             "知识结构框架",
-            ["主干：____", "分支：____", "关键关系：____"],
+            [f"主干：{first_kp}的核心理论", f"分支：{'、'.join(kps)}" if len(kps) > 1 else "相关应用领域", "关键关系：理论与实践的结合"],
             assets=[{"type": "diagram", "theme": "knowledge_framework", "size": "16:9", "style": "mindmap"}],
         )
         for kp in kps:
@@ -274,21 +449,21 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
         add(
             "warning",
             "易错点清单",
-            ["易错点1：____", "易错点2：____", "纠错方法：____"],
+            [f"易错点1：{_get_common_mistake(first_kp)}", f"易错点2：概念理解不透彻导致应用错误", f"纠错方法：{_get_correction_method(first_kp)}"],
             interactions=["投票：你最不确定的是哪一类题？"] if req.include_interaction else [],
         )
 
         add(
             "exercises",
             "典型题讲解",
-            ["题目：____", "思路：____", "答案：____"],
+            [_generate_exercise_question(first_kp, req.subject or "", 1), f"思路：从基本概念出发，结合题目条件分析", f"答案：详见讲解（可在讲师备注中补充）"],
         )
 
         if req.include_exercises:
             add(
                 "exercises",
                 "随堂练习",
-                ["练习1：____", "练习2：____", "参考答案：____"],
+                [_generate_exercise_question(first_kp, req.subject or "", 2), _generate_exercise_question(first_kp, req.subject or "", 3), "参考答案：见讲师备注"],
                 interactions=["现场作答区"] if req.include_interaction else [],
             )
 
@@ -296,6 +471,7 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
 
     else:
         # theory (default)
+        first_kp = kps[0] if kps else "本知识点"
         add(
             "intro",
             "导入：为什么要学这个知识点？",
@@ -312,7 +488,7 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
             add(
                 "relations",
                 "知识点关联框架",
-                ["知识点之间的先后/并列关系", "关键连接：____", "学习路径：____"],
+                ["知识点之间的先后/并列关系", f"关键连接：{kps[0]}为基础，{kps[1]}为应用", f"学习路径：理论→原理→应用"],
                 assets=[{"type": "diagram", "theme": "knowledge_relations", "size": "16:9", "style": "flow"}],
             )
 
@@ -326,14 +502,14 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
             add(
                 "concept",
                 f"要点解析：{kp}",
-                ["要点1：____", "要点2：____", "要点3：____"],
+                [_generate_key_points(kp, 1), _generate_key_points(kp, 2), _generate_key_points(kp, 3)],
             )
 
         if req.include_cases:
             add(
                 "exercises",
                 "案例应用",
-                ["案例背景：____", "分析：____", "结论：____"],
+                [f"案例背景：{first_kp}在实际工作中的应用实例", f"分析：如何运用{first_kp}的原理解决问题", "结论：掌握理论与实践的结合方法"],
                 assets=[{"type": "image", "theme": "case_image", "size": "16:9", "style": "photo"}],
             )
 
@@ -341,14 +517,14 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
             add(
                 "exercises",
                 "习题巩固",
-                ["题目1：____", "题目2：____", "参考答案/解析：____"],
+                [_generate_exercise_question(first_kp, req.subject or "", 1), _generate_exercise_question(first_kp, req.subject or "", 2), "参考答案/解析：详见讲师备注"],
                 interactions=["现场作答区"] if req.include_interaction else [],
             )
 
         add(
             "summary",
             "总结",
-            ["本节课你应该会：____", "关键记忆点：____", "下节课预告：____"],
+            [f"本节课你应该会：掌握{first_kp}的核心概念和应用", f"关键记忆点：{first_kp}的定义、特点和使用场景", "下节课预告：深入学习相关拓展知识"],
         )
 
     # Adjust to slide_count (simple): trim optional slides or pad with Q&A
@@ -365,13 +541,34 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
         while len(slides) > target and len(slides) > 2:
             slides.pop()
 
-    while len(slides) < target:
+    # Padding templates for unique Q&A pages
+    qa_templates: List[Dict[str, Any]] = [
+        {
+            "title": "课堂互动 / Q&A",
+            "bullets": [f"讨论问题：{first_kp}在实际工作中有哪些典型应用？", "思考题：结合所学知识，分析一个实际案例"],
+        },
+        {
+            "title": "拓展思考",
+            "bullets": [f"延伸问题：{first_kp}与其他知识点有什么关联？", f"预习提示：下节课将学习{first_kp}的进阶内容"],
+        },
+        {
+            "title": "知识回顾",
+            "bullets": [f"核心概念回顾：{first_kp}的定义和特点", "关键要点总结：本节课的重点难点"],
+        },
+    ]
+    
+    qa_index = 0
+    max_qa_pages = 2  # Limit padding to avoid too many filler pages
+    
+    while len(slides) < target and qa_index < max_qa_pages:
+        template = qa_templates[qa_index % len(qa_templates)]
         add(
             "qa",
-            "课堂互动 / Q&A",
-            ["问题1：____", "问题2：____"],
+            template["title"],
+            template["bullets"],
             interactions=["举手/弹幕提问"] if req.include_interaction else [],
         )
+        qa_index += 1
 
     # re-index
     for idx, s in enumerate(slides, start=1):
@@ -490,7 +687,34 @@ async def expand_slide_details(
     deck_context: Dict[str, Any],
     llm: Any,
 ) -> OutlineSlide:
-    """Step 2: 并行扩展单页详细内容 (Bullets, Assets, Interactions)"""
+    """Step 2: 并行扩展单页详细内容 (Bullets, Assets, Interactions)
+    
+    优化策略：如果页面已有有效内容，跳过 LLM 调用以节省 token
+    """
+    
+    # Check if slide already has valid bullets (not placeholders)
+    # For exercises pages, don't check for ____ since fill-in-the-blank questions use underscores
+    is_exercises_page = slide.slide_type in ("exercises", "quiz")
+    
+    if is_exercises_page:
+        # Exercises pages: just check for 2+ bullets (allow _____ for fill-in-the-blank)
+        has_valid_bullets = slide.bullets and len(slide.bullets) >= 2
+    else:
+        # Other pages: check for placeholders
+        has_valid_bullets = (
+            slide.bullets 
+            and len(slide.bullets) >= 2 
+            and not any("____" in b or "待填充" in b or "待补充" in b for b in slide.bullets)
+        )
+    
+    if has_valid_bullets:
+        print(f"[DEBUG] expand_slide {slide.index}: SKIPPING (already has {len(slide.bullets)} valid bullets)")
+        # Keep original bullets, just ensure assets/interactions exist
+        if not slide.assets:
+            slide.assets = [{"type": "diagram", "theme": f"{slide.title}相关示意图"}]
+        if not slide.interactions:
+            slide.interactions = []
+        return slide
     
     if not llm.is_enabled():
         slide.bullets = ["(Mock) Point 1", "(Mock) Point 2"]
@@ -806,12 +1030,13 @@ def _adjust_outline_to_target_count(outline: PPTOutline, target_count: Optional[
     
     elif current_count < target_count:
         # 添加Q&A页面
+        first_kp = outline.knowledge_points[0] if outline.knowledge_points else "本知识点"
         while len(slides) < target_count:
             qa_slide = OutlineSlide(
                 index=len(slides) + 1,
                 slide_type="qa",
                 title="课堂互动 / Q&A",
-                bullets=["问题1：____", "问题2：____"],
+                bullets=[f"讨论问题：{first_kp}在实际中有哪些应用？", "思考题：如何将今天所学应用到实际工作中？"],
                 interactions=["举手/弹幕提问"],
             )
             slides.append(qa_slide)
