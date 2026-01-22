@@ -33,6 +33,7 @@ from .common import (
 from .orchestrator import WorkflowEngine
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
+from .modules.content import build_base_deck
 
 load_dotenv()
 
@@ -162,6 +163,7 @@ async def run_workflow(req: WorkflowRunRequest):
         style_samples=state.style_samples,
         outline=state.outline,
         deck_content=state.deck_content,
+        render_result=state.render_result,
         logs_preview=logger.preview(req.session_id),
         message=message,
     )
@@ -778,7 +780,8 @@ async def render_html_slides_api(req: dict):
 
         from .modules.render import render_html_slides
 
-        output_dir = Path(DATA_DIR) / "outputs"
+        # ✅ 关键修复：输出目录必须包含 session_id
+        output_dir = Path(DATA_DIR) / "outputs" / session_id
         output_dir.mkdir(parents=True, exist_ok=True)
 
         result = await render_html_slides(
@@ -786,7 +789,7 @@ async def render_html_slides_api(req: dict):
             style_config=state.style_config,
             teaching_request=state.teaching_request,
             session_id=session_id,
-            output_dir=str(output_dir),
+            output_dir=str(output_dir), # 现在指向 outputs/{session_id}
             llm=llm,
         )
 
@@ -2348,9 +2351,111 @@ def get_generated_image(session_id: str, slot_id: str):
         raise
     except Exception as e:
         logger.emit(
-            session_id, "3.5", "image_error", {"slot_id": slot_id, "error": str(e)}
+            session_id, "render", "image_retrieval_error", {"slot_id": slot_id, "error": str(e)}
         )
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class UpdateDeckRequest(BaseModel):
+    session_id: str
+    deck_content: Dict[str, Any]
+
+@app.post("/api/workflow/deck/update")
+async def update_deck_content(req: UpdateDeckRequest):
+    """
+    强制更新 Session 中的 deck_content
+    用于 3.4 内容生成完毕后，跳转 3.5 之前的数据同步
+    """
+    try:
+        from .common.schemas import SlideDeckContent
+        
+        # 1. 加载 Session
+        store = SessionStore(DATA_DIR)
+        state = store.load(req.session_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        # 2. 验证数据结构
+        # 前端传来的数据必须符合 SlideDeckContent 模型
+        new_content = SlideDeckContent.model_validate(req.deck_content)
+        
+        # 3. 更新状态
+        state.deck_content = new_content
+        # 如果当前阶段还停留在 3.3，强制推进到 3.4
+        if state.stage == "3.3": 
+            state.stage = "3.4"
+            
+        # 4. 保存到磁盘
+        store.save(state)
+        
+        return {"ok": True, "message": "Deck content updated"}
+        
+    except Exception as e:
+        print(f"[Error] Update deck failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 2. 定义请求模型
+class SlideUserContent(BaseModel):
+    index: int
+    script: Optional[str] = ""
+    bullets: Optional[List[str]] = []
+
+class AssembleDeckRequest(BaseModel):
+    session_id: str
+    contents: List[SlideUserContent]
+
+# 3. 新增组装接口
+@app.post("/api/workflow/deck/assemble")
+async def assemble_deck_endpoint(req: AssembleDeckRequest):
+    """
+    3.4 -> 3.5 过渡专用接口：
+    接收前端生成的文本内容(script/bullets)，在后端调用 Layout 引擎组装成完整的 SlideDeckContent。
+    """
+    try:
+        # 加载 Session
+        state = store.load(req.session_id)
+        if not state or not state.outline:
+            raise HTTPException(404, "Session or outline not found")
+            
+        if not state.style_config:
+             raise HTTPException(400, "Style config missing. Please run Step 3.2 first.")
+             
+        # A. 后端生成骨架 (包含 Layout 和 Elements 坐标)
+        # 这确保了数据结构符合 SlideDeckContent 的严格要求
+        deck = build_base_deck(state.teaching_request, state.style_config, state.outline)
+        
+        # B. 填入前端传来的用户内容
+        # 建立索引映射
+        content_map = {c.index: c for c in req.contents}
+        
+        for i, page in enumerate(deck.pages):
+            if i in content_map:
+                user_content = content_map[i]
+                
+                # 1. 更新演讲备注
+                page.speaker_notes = user_content.script
+                
+                # 2. 更新正文要点 (查找类型为 bullets 的元素)
+                # 这一步将前端生成的详细 bullets 写入 PPT 元素中
+                if user_content.bullets:
+                    for elem in page.elements:
+                        if elem.type == "bullets" and "items" in elem.content:
+                            elem.content["items"] = user_content.bullets
+                            break 
+                        
+        # C. 保存完整的 PPT 结构
+        state.deck_content = deck
+        state.stage = "3.4" # 标记完成
+        store.save(state)
+        
+        return {"ok": True, "message": "Deck assembled successfully"}
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        logger.emit(req.session_id, "3.4", "assemble_error", {"error": str(e)})
+        raise HTTPException(500, str(e))
 
 
 @app.post("/api/workflow/render/retry/{session_id}/{slot_id}")

@@ -87,35 +87,51 @@ const contentGenerator = useContentGenerator()
 
 const isRendering = ref(false)
 
-async function startRender() {
-  if (!workflow.sessionId.value) return
-  isRendering.value = true
-  try {
-    const res = await api.renderSlides(workflow.sessionId.value)
-    if (res.ok && res.html_path) {
-        // Convert absolute path to URL
-        // Expected path: .../data/outputs/...
-        const parts = res.html_path.split('/data/')
-        if (parts.length > 1) {
-            const relPath = parts[1] // outputs/session_id/index.html
-            // Construct URL: API_BASE + /data/ + relPath
-            const baseUrl = getApiBase().replace(/\/$/, '')
-            const url = `${baseUrl}/data/${relPath}`
-            window.open(url, '_blank')
-            contentGenerator.addToast('渲染成功！已在新窗口打开', 'success')
+    const startRender = async () => {
+      if (!workflow.sessionId.value) return
+      
+      isRendering.value = true
+      try {
+        // 1. 准备数据：只提取每页的 index, script, bullets
+        // 这些是前端生成或编辑过的核心内容
+        const slidesList = slides.value || []
+        const assembleData = slidesList.map((slide, idx) => {
+            const generated = contentGenerator.generatedContent[idx] || {}
+            return {
+                index: idx,
+                script: generated.script || '',
+                // 优先使用生成的内容，如果没有则回退到大纲内容
+                bullets: generated.bullets && generated.bullets.length > 0 
+                         ? generated.bullets 
+                         : (slide.bullets || [])
+            }
+        })
+        
+        console.log("正在请求后端组装 PPT...", assembleData.length, "页")
+        
+        // 2. 调用组装接口 (替代原来的 updateDeck)
+        await api.assembleDeck(workflow.sessionId.value, assembleData)
+
+        // 3. 成功后跳转，触发自动渲染
+        await router.push({
+          name: 'Module3.5', 
+          query: { 
+            session_id: workflow.sessionId.value,
+            auto_run: 'true' 
+          }
+        })
+        
+      } catch (err) {
+        console.error('Assembly failed:', err)
+        // 使用 toast 显示更友好的错误
+        if (contentGenerator.addToast) {
+            contentGenerator.addToast('生成失败: ' + err.message, 'error')
         } else {
-            console.warn('Path parse error:', res.html_path)
-            contentGenerator.addToast('渲染成功，但无法解析路径', 'success') // still success but warn
+            alert('生成失败: ' + err.message)
         }
-    } else {
-        contentGenerator.addToast('渲染失败: ' + (res.error || 'Unknown'), 'error')
+        isRendering.value = false
+      }
     }
-  } catch (e) {
-    contentGenerator.addToast('渲染请求出错: ' + e.message, 'error')
-  } finally {
-    isRendering.value = false
-  }
-}
 
 // Get slides from workflow outline
 const slides = computed(() => {
