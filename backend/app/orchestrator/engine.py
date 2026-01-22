@@ -1311,7 +1311,7 @@ class WorkflowEngine:
         # --- Stage 3.5 ---
         if state.render_result is None:
             from ..modules.render import render_html_slides
-            from ..modules.render.image_filler import ImageFiller
+            from ..modules.render.services import ImageService
 
             # 渲染HTML幻灯片
             render_result = await render_html_slides(
@@ -1328,7 +1328,7 @@ class WorkflowEngine:
             # 初始化图片生成器（用于后续API调用）
             api_key = os.getenv("DASHSCOPE_API_KEY")
             if api_key:
-                state.image_filler = ImageFiller(
+                state.image_filler = ImageService(
                     api_key=api_key, cache_dir=f"outputs/{session_id}/images_cache"
                 )
 

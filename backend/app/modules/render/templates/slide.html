@@ -1,4 +1,8 @@
-<section class="slide-{{ slide.layout_id }}" data-slide-type="{{ slide.slide_type }}">
+<section 
+    class="slide-{{ slide.layout_id }}" 
+    data-slide-type="{{ slide.slide_type }}"
+    style="{{ slide.dynamic_style | default('') }}" 
+>
     {% if slide.layout_id == 'title_only' %}
     {% include 'layouts/title_only.html' %}
     {% elif slide.layout_id == 'title_bullets' %}

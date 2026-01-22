@@ -619,8 +619,12 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
             "intro": 1,
             # 2 images: 对比/双主体页面
             "comparison": 2,
-            "tools": 2,
             "relations": 2,
+            # 4 images: 阵列/工具集/作品展示
+            "tools": 4,
+            "gallery": 4,
+            "equipment": 4,
+            "grid_4": 4,
         }
         image_hint = slide_type_image_hints.get(slide.slide_type, 1)
 
@@ -645,13 +649,14 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
 - 每个要点 **10-20 字**，不要过长
 
 ### 2️⃣ 按需配图 (Context-Aware Images)
-根据页面类型决定配图数量，**禁止超过 2 张**：
+根据页面类型决定配图数量，**禁止超过 4 张**：
 
 | 配图数 | 适用场景 | 页面类型示例 |
 |--------|----------|-------------|
 | **0** | 纯文字强化、概念定义、金句引用 | title, cover, objectives, summary, qa |
 | **1** | 标准配置（左文右图） | concept, steps, case, warning |
-| **2** | 对比、冲突、双主体 | comparison, tools |
+| **2** | 对比、冲突、双主体 | comparison, relations |
+| **4** | 阵列/工具集/作品展示 | tools, gallery, equipment |
 
 当前页面类型 `{slide.slide_type}` 建议配图数：**{image_hint}**
 
@@ -694,7 +699,7 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
 
 ## 核心原则
 1. **bullets**: 优先保留原始要点，不要改写；如需新增，控制在 2-4 条
-2. **视觉建议**: 严格按照 `image_count` 字段返回对应数量，绝不超过 2 张图
+2. **视觉建议**: 严格按照 `image_count` 字段返回对应数量，绝不超过 4 张图
 3. **精炼表达**: 每条要点 10-20 字，演讲脚本 2-4 句话
 
 以JSON格式返回，数组长度可变。"""
@@ -736,10 +741,10 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
         if len(result_bullets) > 4:
             result_bullets = result_bullets[:4]
 
-        # 🎯 Enforce image limit: respect image_hint, max 2
+        # 🎯 Enforce image limit: respect image_hint, max 4
         result_visuals = result.get("visual_suggestions", [])
         actual_image_count = result.get("image_count", image_hint)
-        actual_image_count = min(actual_image_count, 2)  # Never exceed 2
+        actual_image_count = min(actual_image_count, 4)  # Never exceed 4
 
         # Trim or pad visual_suggestions to match image_count
         if len(result_visuals) > actual_image_count:
@@ -1466,7 +1471,18 @@ render_status_store: Dict[str, Dict[str, Any]] = {}
 def generate_images_task(session_id: str, slots: List, output_dir: Path):
     """后台任务：生成图片并更新状态"""
     try:
-        from .modules.render.image_generator import generate_image
+        from .modules.render import ImageService
+        import shutil
+
+        # 1. 加载 Session 状态以获取上下文 (TeachingRequest, StyleConfig)
+        state = store.load(session_id)
+        if not state:
+            print(f"[BG] Error: Session {session_id} not found")
+            return
+            
+        if not state.teaching_request or not state.style_config:
+            print(f"[BG] Error: Session {session_id} missing context")
+            return
 
         api_key = os.getenv("DASHSCOPE_API_KEY")
         if not api_key:
@@ -1477,6 +1493,9 @@ def generate_images_task(session_id: str, slots: List, output_dir: Path):
         images_dir = output_dir / "images"
         images_dir.mkdir(parents=True, exist_ok=True)
 
+        # 初始化 ImageService
+        filler = ImageService(api_key=api_key, cache_dir=images_dir)
+
         for slot in slots:
             slot_id = slot.slot_id
 
@@ -1486,24 +1505,38 @@ def generate_images_task(session_id: str, slots: List, output_dir: Path):
                 "url": None,
             }
 
-            prompt = f"{slot.theme}, {', '.join(slot.keywords)}, photorealistic, high quality, 4k"
-            if getattr(slot, "visual_style", None):
-                prompt += f", {slot.visual_style} style"
+            print(f"[BG] Generating for {slot_id}")
+            
+            # 使用 ImageService 生成图片 (返回的文件名可能是随机Hash)
+            try:
+                # 2. 构建 Prompt
+                prompt = filler.build_prompt(slot, state.teaching_request, state.style_config)
+                
+                # 3. 准备 slot_data (用于传递 aspect_ratio)
+                slot_data = slot.model_dump() if hasattr(slot, "model_dump") else slot.__dict__
 
-            # 使用 Hash 缓存的生成器
-            filename = f"{session_id}_{slot_id}.png"
-            # 注意: image_generator 内部现在使用 hash 做文件名，但我们可以把 session 相关文件名 copy 过去或者直接用 hash 名
-            # 为了简单，直接用 image_generator 返回的路径
+                # 4. 使用 ImageService 生成图片
+                raw_image_path = filler.generate_image(prompt, slot_id, slot_data=slot_data)
+            except Exception as slot_err:
+                print(f"[BG] Error generating slot {slot_id}: {slot_err}")
+                raw_image_path = None
 
-            print(f"[BG] Generating for {slot_id}: {prompt}")
-            image_abs_path = generate_image(prompt, str(images_dir), api_key)
+            if raw_image_path:
+                # ✅【关键修改】强制重命名为 slot_id.png
+                # 这样 HTML 即使离线也能猜到图片路径
+                ext = os.path.splitext(raw_image_path)[1]  # 获取扩展名 (如 .png)
+                if not ext:
+                    ext = ".png"
+                
+                new_filename = f"{slot_id}{ext}"
+                new_image_path = images_dir / new_filename
+                
+                # 移动/重命名文件 (如果路径不同)
+                if Path(raw_image_path).resolve() != new_image_path.resolve():
+                    shutil.move(raw_image_path, new_image_path)
 
-            if image_abs_path:
-                # 获取相对路径 (相对于 HTML)
-                # image_abs_path 是绝对路径，我们需要 /data/outputs/images/xxx.png 或者 ./images/xxx.png
-                # HTML 也是在 output_dir 下，所以 ./images/文件名
-                rel_name = os.path.basename(image_abs_path)
-                web_url = f"./images/{rel_name}"
+                # 生成相对路径 URL
+                web_url = f"./images/{new_filename}"
 
                 render_status_store[session_id]["images"][slot_id] = {
                     "status": "done",
@@ -1511,10 +1544,16 @@ def generate_images_task(session_id: str, slots: List, output_dir: Path):
                 }
                 print(f"[BG] Done {slot_id} -> {web_url}")
             else:
-                render_status_store[session_id]["images"][slot_id] = {"status": "error"}
+                render_status_store[session_id]["images"][slot_id] = {
+                    "status": "failed",
+                    "error": "Image generation returned None"
+                }
+                print(f"[BG] Failed {slot_id}")
 
     except Exception as e:
         print(f"[BG] Error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 @app.get("/api/workflow/render/status/{session_id}")
@@ -1992,7 +2031,7 @@ async def trigger_image_generation(session_id: str, background_tasks: Background
     import os
     
     try:
-        from .modules.render.image_filler import ImageFiller
+        from .modules.render import ImageService
         
         # 1. 加载 session 状态
         state = store.load(session_id)
@@ -2004,7 +2043,7 @@ async def trigger_image_generation(session_id: str, background_tasks: Background
         
         # 兼容性处理：如果 render_result 是 dict（因为 SessionState 中定义为 Any），则转换为对象
         if isinstance(state.render_result, dict):
-            from .modules.render.schemas import RenderResult
+            from .modules.render import RenderResult
             state.render_result = RenderResult.model_validate(state.render_result)
         
         if not state.render_result.image_slots:
@@ -2021,26 +2060,37 @@ async def trigger_image_generation(session_id: str, background_tasks: Background
         if not api_key:
             return {"ok": False, "error": "DASHSCOPE_API_KEY not configured. Please set the environment variable."}
         
-        # 3. 创建 ImageFiller 实例
+        # 3. 创建 ImageService 实例
         cache_dir = Path(DATA_DIR) / "outputs" / "images"
         cache_dir.mkdir(parents=True, exist_ok=True)
-        filler = ImageFiller(api_key=api_key, cache_dir=str(cache_dir))
+        filler = ImageService(api_key=api_key, cache_dir=str(cache_dir))
         
         total_slots = len(state.render_result.image_slots)
         
         # 3.1 立即更新状态为 pending/generating，以便前端 UI 立即响应
-        from .modules.render.schemas import ImageSlotResult
+        from .modules.render.core import ImageSlotResult
         import time
+        import shutil
         
+        # 初始化全局状态存储，确保前端轮询能看到进度 (之前遗漏的关键点)
+        render_status_store[session_id] = {"images": {}}
+
         initial_results = []
         for slot in state.render_result.image_slots:
+            # 更新 SessionStore 状态
             initial_results.append(ImageSlotResult(
                 slot_id=slot.slot_id,
                 page_index=slot.page_index,
-                status="generating",  # 标记为正在生成
+                status="generating",
                 image_path=None,
                 error=None,
             ))
+            # 更新全局状态存储
+            render_status_store[session_id]["images"][slot.slot_id] = {
+                "status": "generating",
+                "url": None,
+            }
+
         state.render_result.image_results = initial_results
         store.save(state)
         
@@ -2053,6 +2103,61 @@ async def trigger_image_generation(session_id: str, background_tasks: Background
                     teaching_request=state.teaching_request,
                     style_config=state.style_config,
                 )
+                
+                # 确定 session 的图片目录
+                # html_path 类似 "outputs/{session_id}/index.html"
+                try:
+                    # 解析 session 目录: backend/data/outputs/{session_id}
+                    rel_html_path = state.render_result.html_path
+                    if "outputs/" in rel_html_path:
+                        # 提取 session_id 部分
+                        # 假设路径结构 outputs/mock_xxxx/index.html
+                        session_rel_dir = os.path.dirname(rel_html_path) # outputs/mock_xxxx
+                        session_dir = Path(DATA_DIR) / session_rel_dir.replace("outputs/", "outputs/") # 稍微冗余但安全
+                    else:
+                        # Fallback
+                        session_dir = Path(DATA_DIR) / "outputs" / session_id
+                    
+                    local_images_dir = session_dir / "images"
+                    local_images_dir.mkdir(parents=True, exist_ok=True)
+                except Exception as ex:
+                    logger.error(f"Failed to resolve session dir: {ex}")
+                    local_images_dir = None
+
+                # 处理结果：将缓存图片复制到 session 目录并重命名 -> slot_id.png
+                for res in results:
+                    if res.status == "done" and res.image_path and os.path.exists(res.image_path):
+                        web_url = None
+                        
+                        if local_images_dir:
+                            try:
+                                # 强制重命名为 slot_id.png
+                                ext = os.path.splitext(res.image_path)[1] or ".png"
+                                new_filename = f"{res.slot_id}{ext}"
+                                target_path = local_images_dir / new_filename
+                                
+                                # 从共享缓存复制到 session 目录
+                                shutil.copy2(res.image_path, target_path)
+                                
+                                # 生成相对路径 URL (用于 HTML 离线访问)
+                                web_url = f"./images/{new_filename}"
+                                
+                                # 更新结果中的 path 为本地 path (或者保留缓存 path? 这里改为本地 path 更一致)
+                                # res.image_path = str(target_path) 
+                            except Exception as copy_err:
+                                logger.error(f"Failed to copy image for {res.slot_id}: {copy_err}")
+                        
+                        # 更新全局状态
+                        render_status_store[session_id]["images"][res.slot_id] = {
+                            "status": "done",
+                            "url": web_url or f"/api/files/{os.path.basename(res.image_path)}", # Fallback
+                        }
+                    else:
+                        render_status_store[session_id]["images"][res.slot_id] = {
+                            "status": "failed",
+                            "error": res.error or "Unknown error"
+                        }
+
                 # 更新 session 状态
                 state.render_result.image_results = results
                 store.save(state)
@@ -2115,6 +2220,40 @@ app.include_router(render_router, prefix="/api/workflow/render")
 async def debug_generate(session_id: str = None):
     print(f"DEBUG: debug_generate called with session_id: {session_id}")
     return {"ok": True, "session_id": session_id, "message": "Debug endpoint works"}
+
+
+@app.get("/api/workflow/download/{session_id}")
+async def download_project_package(session_id: str):
+    """
+    打包下载生成的 PPT 项目 (HTML + 资源 + 图片)
+    """
+    import shutil
+    from fastapi.responses import FileResponse
+
+    # 1. 定位输出目录
+    output_dir = Path(DATA_DIR) / "outputs" / session_id
+    if not output_dir.exists():
+        raise HTTPException(status_code=404, detail="Project output not found")
+
+    # 2. 准备临时 ZIP 路径
+    temp_dir = Path(DATA_DIR) / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    zip_base_name = temp_dir / session_id  # make_archive 会自动加 .zip
+    zip_path = Path(f"{zip_base_name}.zip")
+
+    try:
+        # 3. 创建 ZIP (如果已存在且较新则直接返回，这里简单起见每次都覆盖)
+        shutil.make_archive(str(zip_base_name), "zip", str(output_dir))
+
+        # 4. 返回文件
+        return FileResponse(
+            path=zip_path,
+            filename=f"ppt_project_{session_id}.zip",
+            media_type="application/zip",
+        )
+    except Exception as e:
+        logger.emit(session_id, "export", "zip_error", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to create zip: {str(e)}")
 
 
 @app.get("/api/workflow/render/status/{session_id}")
@@ -2210,9 +2349,9 @@ def get_generated_image(session_id: str, slot_id: str):
                 if not state.image_filler:
                     api_key = os.getenv("DASHSCOPE_API_KEY")
                     if api_key:
-                        from .modules.render.image_filler import ImageFiller
+                        from .modules.render import ImageService
 
-                        state.image_filler = ImageFiller(
+                        state.image_filler = ImageService(
                             api_key=api_key,
                             cache_dir=f"{DATA_DIR}/{session_id}/images_cache",
                         )
@@ -2273,9 +2412,9 @@ async def retry_slot_generation(
             if not api_key:
                 return {"ok": False, "error": "DASHSCOPE_API_KEY not configured"}
 
-            from .modules.render.image_filler import ImageFiller
+            from .modules.render import ImageService
 
-            image_filler = ImageFiller(
+            image_filler = ImageService(
                 api_key=api_key, cache_dir=f"{DATA_DIR}/{session_id}/images_cache"
             )
             state.image_filler = image_filler
@@ -2361,7 +2500,7 @@ async def run_single_image_task(
         image_path = image_filler.generate_image(prompt, slot.slot_id)
 
         # 创建结果
-        from .modules.render.image_filler import ImageSlotResult
+        from .modules.render.core import ImageSlotResult
         import time
         from datetime import datetime
 

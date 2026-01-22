@@ -1,29 +1,21 @@
 """
-Module 3.5: 智能排版与动态渲染引擎
+Module 3.5: Render 模块入口
 """
+from .core import RenderResult, ImageSlotRequest, ImageSlotResult
+from .renderer import HTMLRenderer
+from .services import ImageService
 
-from .schemas import (
-    ImageSlotRequest,
-    ImageSlotResult,
-    RenderResult,
-    LayoutConfig,
-    ImageStyle,
-    AspectRatio,
-    ColorConstraint,
-)
-from .html_renderer import render_html_slides
-from .layout_configs import VOCATIONAL_LAYOUTS
-from .image_filler import ImageFiller
+# 为了保持向后兼容，或者提供便捷函数
+# 我们可以简单包装一下 HTMLRenderer.render
+async def render_html_slides(*args, **kwargs):
+    return await HTMLRenderer.render(*args, **kwargs)
 
+# 导出为了类型提示
 __all__ = [
+    "render_html_slides",
+    "HTMLRenderer",
+    "ImageService",
+    "RenderResult",
     "ImageSlotRequest",
     "ImageSlotResult",
-    "RenderResult",
-    "LayoutConfig",
-    "ImageStyle",
-    "AspectRatio",
-    "ColorConstraint",
-    "render_html_slides",
-    "VOCATIONAL_LAYOUTS",
-    "ImageFiller",
 ]

@@ -106,5 +106,10 @@ export const api = {
       body: { use_mock: true, subject }
     })
   },
+
+  getDownloadUrl(session_id) {
+    const base = getApiBase().replace(/\/$/, '')
+    return `${base}/api/workflow/download/${session_id}`
+  },
 }
 

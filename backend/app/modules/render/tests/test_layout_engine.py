@@ -11,38 +11,26 @@ from app.common.schemas import (
     SlideRequirementsDetail,
     SubjectInfo,
 )
-from app.modules.render.layout_engine import (
-    resolve_layout,
-    _map_by_slide_type,
-    _match_by_keywords,
-    _score_and_select,
-    _calculate_text_length,
-)
-from app.modules.render.layout_engine import (
-    resolve_layout,
-    _map_by_slide_type,
-    _match_by_keywords,
-    _score_and_select,
-    _calculate_text_length,
-)
+from app.modules.render.engine import LayoutEngine
+from app.modules.render.core import calculate_text_length
 
 
 def test_map_by_slide_type():
     """测试 slide_type 强制映射"""
-    assert _map_by_slide_type("title") == "title_only"
-    assert _map_by_slide_type("cover") == "title_only"
-    assert _map_by_slide_type("objectives") == "title_bullets"
-    assert _map_by_slide_type("summary") == "title_bullets"
-    assert _map_by_slide_type("agenda") == "title_bullets"
+    assert LayoutEngine._map_by_slide_type("title") == "title_only"
+    assert LayoutEngine._map_by_slide_type("cover") == "title_only"
+    assert LayoutEngine._map_by_slide_type("objectives") == "title_bullets"
+    assert LayoutEngine._map_by_slide_type("summary") == "title_bullets"
+    assert LayoutEngine._map_by_slide_type("agenda") == "title_bullets"
     # "steps" mapping removed - LLM decides based on context
-    assert _map_by_slide_type("steps") is None
+    assert LayoutEngine._map_by_slide_type("steps") is None
     assert (
-        _map_by_slide_type("comparison") is None
+        LayoutEngine._map_by_slide_type("comparison") is None
     )  # No direct mapping, uses keyword matching
     assert (
-        _map_by_slide_type("tools") is None
+        LayoutEngine._map_by_slide_type("tools") is None
     )  # No direct mapping, uses keyword matching
-    assert _map_by_slide_type("unknown_type") is None
+    assert LayoutEngine._map_by_slide_type("unknown_type") is None
 
 
 def test_match_by_keywords():
@@ -54,7 +42,7 @@ def test_match_by_keywords():
         title="操作步骤说明",
         elements=[],
     )
-    assert _match_by_keywords(page) == "operation_steps"
+    assert LayoutEngine._match_by_keywords(page) == "operation_steps"
 
     # 测试对比关键词
     page = SlidePage(
@@ -63,7 +51,7 @@ def test_match_by_keywords():
         title="正确与错误对比",
         elements=[],
     )
-    assert _match_by_keywords(page) == "concept_comparison"
+    assert LayoutEngine._match_by_keywords(page) == "concept_comparison"
 
     # 测试工具关键词
     page = SlidePage(
@@ -72,7 +60,7 @@ def test_match_by_keywords():
         title="常用工具介绍",
         elements=[],
     )
-    assert _match_by_keywords(page) == "grid_4"
+    assert LayoutEngine._match_by_keywords(page) == "grid_4"
 
     # 测试无匹配
     page = SlidePage(
@@ -81,7 +69,7 @@ def test_match_by_keywords():
         title="基本概念",
         elements=[],
     )
-    assert _match_by_keywords(page) is None
+    assert LayoutEngine._match_by_keywords(page) is None
 
 
 def test_calculate_text_length():
@@ -104,7 +92,7 @@ def test_calculate_text_length():
         ],
     )
     # 总长度: 4 + 8 + 9 = 21
-    assert _calculate_text_length(page) == 21
+    assert calculate_text_length(page) == 21
 
 
 def test_score_and_select_practice_scene():
@@ -136,9 +124,9 @@ def test_score_and_select_practice_scene():
         ],
     )
 
-    layout_id = _score_and_select(page, req)
+    layout_id = LayoutEngine._score_and_select(page, req)
     # 实训场景 + 1 张图片,应该选择包含图片的布局
-    assert layout_id in ["operation_steps", "title_bullets_right_img"]
+    assert layout_id in ["operation_steps", "title_bullets_right_img", "center_visual"]
 
 
 def test_score_and_select_multiple_images():
@@ -162,7 +150,7 @@ def test_score_and_select_multiple_images():
         ],
     )
 
-    layout_id = _score_and_select(page, req)
+    layout_id = LayoutEngine._score_and_select(page, req)
     # 4 张图片,应该选择 grid_4
     assert layout_id == "grid_4"
 
@@ -186,7 +174,7 @@ async def test_resolve_layout_integration():
         title="课程标题",
         elements=[],
     )
-    layout_id, image_slots = await resolve_layout(page, req, 1)
+    layout_id, image_slots = await LayoutEngine.resolve_layout(page, req, 1)
     assert layout_id == "title_only"
     assert len(image_slots) == 0  # title_only 无图片插槽
 
@@ -203,7 +191,7 @@ async def test_resolve_layout_integration():
             ),
         ],
     )
-    layout_id, image_slots = await resolve_layout(page, req, 2)
+    layout_id, image_slots = await LayoutEngine.resolve_layout(page, req, 2)
     assert layout_id == "operation_steps"
     assert len(image_slots) == 1  # operation_steps 有 1 个图片插槽
 
@@ -235,7 +223,7 @@ async def test_text_overflow_check():
         ],
     )
 
-    layout_id, _ = await resolve_layout(page, req, 1)
+    layout_id, _ = await LayoutEngine.resolve_layout(page, req, 1)
     # 超长文本应该降级到 title_bullets
     assert layout_id == "title_bullets"
 

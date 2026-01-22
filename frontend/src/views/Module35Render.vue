@@ -115,6 +115,9 @@
           在新窗口打开
         </a>
         <button @click="copyPath" class="btn-secondary">复制路径</button>
+        <a :href="downloadUrl" target="_blank" class="btn-primary" style="background-color: #e67e22; border-color: #d35400;">
+          📥 下载项目包 (ZIP)
+        </a>
       </div>
       
       <!-- 嵌入预览窗口 -->
@@ -134,7 +137,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { api } from '../api'
 
 export default {
@@ -293,6 +296,9 @@ export default {
           htmlPath.value = renderRes.html_path
           sessionId.value = renderRes.session_id
 
+          // ✅【关键修复】立即更新浏览器 URL，防止刷新后丢失新 Session ID
+          window.history.replaceState({}, '', `?session_id=${renderRes.session_id}`)
+
           // 开始生成图片
           await generateImages()
         } else {
@@ -372,6 +378,11 @@ export default {
       });
     })
 
+    const downloadUrl = computed(() => {
+      if (!sessionId.value) return '#'
+      return api.getDownloadUrl(sessionId.value)
+    })
+
     return {
       loading,
       generatingImages,
@@ -386,6 +397,7 @@ export default {
       renderWithMockFull,
       generateImages,
       copyPath,
+      downloadUrl
     }
   },
 }

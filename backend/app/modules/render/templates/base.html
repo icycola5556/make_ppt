@@ -6,17 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ deck_title }}</title>
 
-    <!-- Reveal.js 核心样式 (本地) -->
-    <link rel="stylesheet" href="/static/reveal.js/reveal.js-4.6.1/dist/reveal.css">
-    <link rel="stylesheet" href="/static/reveal.js/reveal.js-4.6.1/dist/theme/white.css">
+    <!-- Reveal.js 核心样式 (本地/离线兼容) -->
+    <link rel="stylesheet" href="./static/reveal.js/reveal.js-4.6.1/dist/reveal.css">
+    <link rel="stylesheet" href="./static/reveal.js/reveal.js-4.6.1/dist/theme/white.css">
 
     <!-- 字体配置 (系统字体栈) -->
-    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="./static/fonts/fonts.css">
 
     <!-- 自定义样式 -->
-    <link rel="stylesheet" href="/styles/layouts/vocational.css">
-    <link rel="stylesheet" href="/styles/components/image-slot.css">
-    <link rel="stylesheet" href="/styles/themes/{{ theme_name }}.css">
+    <link rel="stylesheet" href="./styles/layouts/vocational.css">
+    <link rel="stylesheet" href="./styles/components/image-slot.css">
+    <link rel="stylesheet" href="./styles/themes/{{ theme_name }}.css">
 
     <style>
         /* CSS Variables - 从 StyleConfig 动态生成 */
@@ -26,6 +26,33 @@
                     css_variables | safe
                 }
             }
+        }
+
+        /* ✨ Premium 视觉效果 - 渐变背景 */
+        .reveal {
+            background: var(--color-background);
+            background: var(--color-bg-gradient, var(--color-background));
+        }
+
+        /* ✨ 毛玻璃卡片效果 (Glassmorphism) */
+        .slide-content,
+        .bullets-container,
+        .content-bullets,
+        .content-steps,
+        .comparison-left,
+        .comparison-right,
+        .grid-item {
+            background: var(--color-surface, rgba(255, 255, 255, 0.8));
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* 深色主题下的毛玻璃调整 */
+        .reveal[data-theme="dark"] .slide-content,
+        .reveal[data-theme="dark"] .bullets-container {
+            background: var(--color-surface, rgba(30, 41, 59, 0.7));
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         /* 图片生成控制面板 */
@@ -208,8 +235,8 @@
         </div>
     </div>
 
-    <!-- Reveal.js 核心脚本 (本地) -->
-    <script src="/static/reveal.js/reveal.js-4.6.1/dist/reveal.js"></script>
+    <!-- Reveal.js 核心脚本 (本地/离线兼容) -->
+    <script src="./static/reveal.js/reveal.js-4.6.1/dist/reveal.js"></script>
 
     <script>
         // Reveal.js 配置 (导出友好,无 3D 效果)
