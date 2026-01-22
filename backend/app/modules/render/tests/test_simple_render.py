@@ -5,17 +5,20 @@
 """
 
 import sys
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[3]))
 
 from app.common.schemas import SlideDeckContent, SlidePage, SlideElement
-from app.modules.render.layout_engine import resolve_layout
-from app.modules.render.html_renderer import _extract_bullets, _generate_css_variables
+from app.modules.render.engine import LayoutEngine
+from app.modules.render.core import extract_bullets
+from app.modules.render.renderer import HTMLRenderer
 from jinja2 import Environment, FileSystemLoader
 
 
-def test_simple_render():
+@pytest.mark.asyncio
+async def test_simple_render():
     """简化的渲染测试"""
     print("=" * 60)
     print("简化渲染测试")
@@ -54,10 +57,25 @@ def test_simple_render():
     print(f"\n✓ 创建了 {len(pages)} 页测试数据")
     
     # 测试要点提取
-    bullets = _extract_bullets(pages[1])
+    bullets = extract_bullets(pages[1])
     print(f"✓ 提取要点: {bullets}")
     
-    # 测试模板渲染
+    # 测试模板渲染 (需要模拟 LayoutEngine 和 CSS 变量)
+    # 这里我们只测试模板加载和基本渲染，不做完整流程
+    
+    # 模拟 render 中的一些步骤
+    # 1. 布局选择
+    # 注意: resolve_layout 是 async 的
+    layout_id, _ = await LayoutEngine.resolve_layout(pages[0], None, 1) # None for teaching_request if allowed, check implementation
+    # resolve_layout 需要 teaching_request，这里需要构造一个简单的 mock
+    class MockRequest:
+        subject_info = type('obj', (object,), {'subject_name': 'test'})
+        teaching_scene = 'theory'
+        
+    layout_id, _ = await LayoutEngine.resolve_layout(pages[0], MockRequest(), 1)
+    
+    print(f"✓ 布局选择: {layout_id}")
+
     template_dir = Path(__file__).parents[1] / "templates"
     env = Environment(loader=FileSystemLoader(str(template_dir)))
     template = env.get_template("layouts/title_only.html")
@@ -71,4 +89,5 @@ def test_simple_render():
 
 
 if __name__ == "__main__":
-    test_simple_render()
+    import asyncio
+    asyncio.run(test_simple_render())
