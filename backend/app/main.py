@@ -356,12 +356,73 @@ async def expand_slide_detail_endpoint(req: SlideExpandRequest):
         # Actually Python objects are passed by reference, so modifying 'target_slide' modifies 'state.outline.slides[i]'
         # We just need to save state.
         state.outline.slides[req.slide_index] = expanded_slide
+        
+        # 对扩展后的slide进行assets后处理（生成描述）
+        if llm.is_enabled():
+            from .modules.outline.core import _process_slide_assets
+            processed_slide = await _process_slide_assets(
+                expanded_slide,
+                state.teaching_request,
+                llm,
+                logger,
+                req.session_id
+            )
+            state.outline.slides[req.slide_index] = processed_slide
+            expanded_slide = processed_slide
+        
         store.save(state) 
         
         return SlideExpandResponse(ok=True, slide=expanded_slide)
         
     except Exception as e:
+        logger.emit(req.session_id, "3.3", "expand_slide_error", {"error": str(e), "slide_index": req.slide_index})
         return SlideExpandResponse(ok=False, slide=None, error=str(e))
+
+
+class OutlinePostProcessRequest(BaseModel):
+    session_id: str
+
+class OutlinePostProcessResponse(BaseModel):
+    ok: bool
+    outline: Optional[PPTOutline] = None
+    error: Optional[str] = None
+
+@app.post("/api/workflow/outline/post-process", response_model=OutlinePostProcessResponse)
+async def post_process_outline_endpoint(req: OutlinePostProcessRequest):
+    """在所有slides扩展完成后，统一进行assets后处理（生成描述、补充字段）"""
+    try:
+        from .modules.outline.core import _post_process_outline_assets
+        
+        state = store.load(req.session_id)
+        if not state or not state.outline:
+            return OutlinePostProcessResponse(ok=False, outline=None, error="No outline found")
+        
+        if not state.teaching_request:
+            return OutlinePostProcessResponse(ok=False, outline=None, error="No teaching request found")
+        
+        # 对outline进行完整的assets后处理
+        processed_outline = await _post_process_outline_assets(
+            state.outline,
+            state.teaching_request,
+            llm,
+            logger,
+            req.session_id
+        )
+        
+        # 更新state
+        state.outline = processed_outline
+        store.save(state)
+        
+        logger.emit(req.session_id, "3.3", "outline_post_processed", {
+            "total_slides": len(processed_outline.slides),
+            "slides_with_assets": len([s for s in processed_outline.slides if s.assets])
+        })
+        
+        return OutlinePostProcessResponse(ok=True, outline=processed_outline)
+        
+    except Exception as e:
+        logger.emit(req.session_id, "3.3", "post_process_error", {"error": str(e)})
+        return OutlinePostProcessResponse(ok=False, outline=None, error=str(e))
 
 
 # =============================================================================

@@ -380,6 +380,10 @@ class WorkflowEngine:
                 # 后处理：使用LLM更准确地判断每页的slide_type
                 optimized = await _refine_slide_types(optimized, self.llm, self.logger, session_id)
                 
+                # 后处理assets：生成描述、补充size/style字段
+                from ..modules.outline.core import _post_process_outline_assets
+                optimized = await _post_process_outline_assets(optimized, req, self.llm, self.logger, session_id)
+                
                 return optimized
             except Exception as e:
                 self._handle_workflow_error(session_id, "3.3", e, {"outline_available": True})
@@ -390,6 +394,18 @@ class WorkflowEngine:
                 outline = await _refine_slide_types(outline, self.llm, self.logger, session_id)
             except Exception as e:
                 self._handle_workflow_error(session_id, "3.3", e, {"type_refinement_failed": True})
+        
+        # 后处理assets：生成描述、补充size/style字段（如果LLM可用）
+        if self.llm.is_enabled():
+            try:
+                from ..modules.outline.core import _post_process_outline_assets
+                outline = await _post_process_outline_assets(outline, req, self.llm, self.logger, session_id)
+            except Exception as e:
+                self._handle_workflow_error(session_id, "3.3", e, {"assets_post_process_failed": True})
+        else:
+            # LLM不可用时，使用同步版本只补充字段
+            from ..modules.outline.core import _post_process_outline_assets_sync
+            outline = _post_process_outline_assets_sync(outline)
 
         return outline
 

@@ -524,6 +524,18 @@ async function generateParallelOutline() {
         // Run Expansion (this updates backend session state)
         await outlineGenerator.expandAllSlides(5) // Concurrency 5
         
+        // 扩展完成后，进行assets后处理（生成描述、补充字段）
+        currentStep.value = '阶段 4: 正在处理图片资源...'
+        try {
+            const postProcessRes = await api.postProcessOutline(sessionId.value)
+            if (postProcessRes.ok && postProcessRes.outline) {
+                outline.value = postProcessRes.outline
+            }
+        } catch (e) {
+            console.warn('Assets后处理失败:', e)
+            // 即使后处理失败，也继续流程
+        }
+        
         // Reload session to get updated outline with bullets
         await refreshState()
         
