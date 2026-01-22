@@ -524,6 +524,18 @@ async function generateParallelOutline() {
         // Run Expansion (this updates backend session state)
         await outlineGenerator.expandAllSlides(5) // Concurrency 5
         
+        // 扩展完成后，进行assets后处理（生成描述、补充字段）
+        currentStep.value = '阶段 4: 正在处理图片资源...'
+        try {
+            const postProcessRes = await api.postProcessOutline(sessionId.value)
+            if (postProcessRes.ok && postProcessRes.outline) {
+                outline.value = postProcessRes.outline
+            }
+        } catch (e) {
+            console.warn('Assets后处理失败:', e)
+            // 即使后处理失败，也继续流程
+        }
+        
         // Reload session to get updated outline with bullets
         await refreshState()
         
@@ -610,8 +622,51 @@ onMounted(async () => {
   }
 })
 
+// 前端兜底映射：即使 API 数据缺失，也能正确显示中文
+const SLIDE_TYPE_FALLBACK_MAP = {
+  'intro': '导入',
+  'cover': '封面', 
+  'title': '封面',
+  'objectives': '目标',
+  'concept': '概念',
+  'content': '内容',
+  'steps': '步骤',
+  'practice': '实践',
+  'comparison': '对比',
+  'case': '案例',
+  'case_compare': '案例对比',
+  'tools': '工具',
+  'summary': '总结',
+  'bridge': '过渡',
+  'transition': '过渡',
+  'agenda': '议程',
+  'qa': '问答',
+  'exercise': '练习',
+  'exercises': '练习',
+  'discussion': '讨论',
+  'warning': '注意',
+  'reference': '参考',
+  'principle': '原理',
+  'process': '流程',
+  'structure': '结构',
+  'chart': '图表',
+  'data': '数据',
+  'map': '地图',
+  'appendix': '附录',
+  'subtitle': '副标题',
+}
+
 function getSlideTypeLabel(type) {
-  return slideTypeMap.value[type]?.name || type
+  // 1. 优先使用 API 返回的映射
+  if (slideTypeMap.value[type]?.name) {
+    return slideTypeMap.value[type].name
+  }
+  // 2. 使用前端硬编码的 fallback 映射
+  if (SLIDE_TYPE_FALLBACK_MAP[type]) {
+    return SLIDE_TYPE_FALLBACK_MAP[type]
+  }
+  // 3. 最终 fallback: 显示通用标签 "页面"（不显示英文）
+  return '页面'
 }
 
 function getSlideTypeDescription(type) {

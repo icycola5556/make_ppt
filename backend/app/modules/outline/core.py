@@ -8,6 +8,237 @@ from typing import Any, Dict, List, Optional
 from ...common.schemas import OutlineSlide, PPTOutline, TeachingRequest
 from ...prompts.outline import OUTLINE_PLANNING_SYSTEM_PROMPT
 
+# 预定义不需要图片的页面类型
+SLIDE_TYPES_WITHOUT_IMAGES = {
+    "title",      # 封面页通常不需要额外图片
+    "objectives", # 教学目标页通常不需要图片
+    "summary",    # 总结页通常不需要图片
+    "qa",         # 问答页通常不需要图片
+    "reference",  # 参考页通常不需要图片
+}
+
+
+# ============================================================================
+# Assets后处理：生成图片描述和补充size/style字段
+# ============================================================================
+
+async def _generate_asset_description(
+    asset: Dict[str, Any],
+    slide: OutlineSlide,
+    req: TeachingRequest,
+    llm: Any,
+    logger: Any,
+    session_id: str,
+) -> Dict[str, Any]:
+    """为diagram或photo类型的asset生成详细的文字描述（用于后续图片生成的prompt）"""
+    
+    asset_type = asset.get("type", "").lower()
+    
+    # 只处理diagram和photo类型
+    if asset_type not in ["diagram", "photo"]:
+        return asset
+    
+    # 如果已经有description字段且不为空，直接返回
+    if asset.get("description") and asset.get("description").strip():
+        return asset
+    
+    # 构建上下文信息
+    context = {
+        "slide_title": slide.title,
+        "slide_type": slide.slide_type,
+        "bullets": slide.bullets,
+        "subject": req.subject,
+        "knowledge_points": req.kp_names,
+        "teaching_scene": req.teaching_scene,
+        "asset_type": asset_type,
+        "theme": asset.get("theme", ""),
+    }
+    
+    # 如果LLM可用，使用LLM生成描述
+    if llm and llm.is_enabled():
+        try:
+            system_prompt = """你是PPT图片描述生成专家。你的任务是根据PPT页面的主题内容，为图片素材生成详细的文字描述，这个描述将用于后续AI图片生成的prompt。
+
+## 任务要求
+1. 根据页面标题、要点内容和知识点，理解这一页的教学主题
+2. 结合asset的type（diagram或photo）和theme，生成详细的图片描述
+3. 描述应该：
+   - 具体明确，包含关键元素和场景细节
+   - 适合作为AI图片生成的prompt
+   - 体现教学内容的专业性和准确性
+   - 如果是diagram，描述应该包含图表的结构、元素关系等
+   - 如果是photo，描述应该包含场景、对象、环境等
+
+## 输出格式
+返回JSON格式：
+{
+  "description": "详细的图片描述文字，用于AI图片生成"
+}
+
+只输出JSON，不要解释。"""
+            
+            user_payload = json.dumps(context, ensure_ascii=False, indent=2)
+            
+            schema_hint = '{"description": "string"}'
+            
+            parsed, meta = await llm.chat_json(
+                system_prompt,
+                user_payload,
+                schema_hint,
+                temperature=0.7,
+            )
+            
+            if parsed and parsed.get("description"):
+                asset["description"] = parsed["description"]
+                logger.emit(session_id, "3.3", "asset_description_generated", {
+                    "slide_index": slide.index,
+                    "asset_type": asset_type,
+                    "description_length": len(parsed["description"])
+                })
+        except Exception as e:
+            logger.emit(session_id, "3.3", "asset_description_error", {
+                "slide_index": slide.index,
+                "asset_type": asset_type,
+                "error": str(e)
+            })
+            # 生成fallback描述
+            asset["description"] = _generate_fallback_asset_description(asset, slide, context)
+    else:
+        # LLM不可用，生成fallback描述
+        asset["description"] = _generate_fallback_asset_description(asset, slide, context)
+    
+    return asset
+
+
+def _generate_fallback_asset_description(
+    asset: Dict[str, Any],
+    slide: OutlineSlide,
+    context: Dict[str, Any],
+) -> str:
+    """生成fallback的asset描述（当LLM不可用时）"""
+    asset_type = asset.get("type", "").lower()
+    theme = asset.get("theme", "")
+    slide_title = slide.title
+    
+    if asset_type == "diagram":
+        # 图表类型：描述图表的结构和内容
+        if theme:
+            return f"关于{theme}的示意图，展示{slide_title}相关的结构、流程或关系"
+        else:
+            return f"展示{slide_title}相关内容的示意图，包含关键要素和关系"
+    elif asset_type == "photo":
+        # 照片类型：描述场景和对象
+        if theme:
+            return f"关于{theme}的实景照片，展示{slide_title}相关的实际应用场景"
+        else:
+            return f"展示{slide_title}相关内容的实景照片，体现实际应用场景"
+    else:
+        return f"与{slide_title}相关的图片素材"
+
+
+def _ensure_asset_fields(asset: Dict[str, Any]) -> Dict[str, Any]:
+    """确保asset包含size和style字段"""
+    # 如果缺少size，设置默认值
+    if "size" not in asset or not asset["size"]:
+        asset["size"] = "16:9"  # 默认16:9比例
+    
+    # 如果缺少style，根据type设置默认值
+    if "style" not in asset or not asset["style"]:
+        asset_type = asset.get("type", "").lower()
+        if asset_type == "diagram":
+            asset["style"] = "schematic"  # 示意图风格
+        elif asset_type == "photo":
+            asset["style"] = "photo"  # 照片风格
+        elif asset_type == "image":
+            asset["style"] = "photo"  # 图片默认照片风格
+        else:
+            asset["style"] = "illustration"  # 其他类型默认插画风格
+    
+    return asset
+
+
+def _post_process_outline_assets_sync(
+    outline: PPTOutline,
+) -> PPTOutline:
+    """同步版本的assets后处理：只补充size/style字段，不生成描述（用于同步函数）"""
+    for slide in outline.slides:
+        # 判断该页面类型是否需要图片
+        if slide.slide_type in SLIDE_TYPES_WITHOUT_IMAGES:
+            # 如果页面类型不需要图片，跳过
+            continue
+        
+        # 处理每个asset，确保包含size和style字段
+        processed_assets = []
+        for asset in slide.assets:
+            asset = _ensure_asset_fields(asset.copy())
+            processed_assets.append(asset)
+        
+        slide.assets = processed_assets
+    
+    return outline
+
+
+async def _process_slide_assets(
+    slide: OutlineSlide,
+    req: TeachingRequest,
+    llm: Any,
+    logger: Any,
+    session_id: str,
+) -> OutlineSlide:
+    """处理单个slide的assets：生成描述、补充字段、判断是否需要图片"""
+    
+    # 判断该页面类型是否需要图片
+    if slide.slide_type in SLIDE_TYPES_WITHOUT_IMAGES:
+        # 如果页面类型不需要图片，但已有assets，仍然处理它们（补充字段）
+        # 如果没有assets，不添加新的
+        if not slide.assets:
+            return slide
+        # 如果有assets，继续处理（但可能不生成描述，取决于LLM判断）
+    
+    # 处理每个asset
+    processed_assets = []
+    for asset in slide.assets:
+        # 确保包含size和style字段
+        asset = _ensure_asset_fields(asset.copy())
+        
+        # 为diagram和photo类型生成描述（即使页面类型在SLIDE_TYPES_WITHOUT_IMAGES中，如果已有asset也生成描述）
+        asset = await _generate_asset_description(
+            asset, slide, req, llm, logger, session_id
+        )
+        
+        processed_assets.append(asset)
+    
+    slide.assets = processed_assets
+    return slide
+
+
+async def _post_process_outline_assets(
+    outline: PPTOutline,
+    req: TeachingRequest,
+    llm: Any,
+    logger: Any,
+    session_id: str,
+) -> PPTOutline:
+    """后处理outline的所有slides的assets"""
+    
+    import asyncio
+    
+    # 并行处理所有slides的assets
+    processed_slides = await asyncio.gather(*[
+        _process_slide_assets(slide, req, llm, logger, session_id)
+        for slide in outline.slides
+    ])
+    
+    # 更新outline的slides
+    outline.slides = list(processed_slides)
+    
+    logger.emit(session_id, "3.3", "assets_post_processed", {
+        "total_slides": len(outline.slides),
+        "slides_with_assets": len([s for s in outline.slides if s.assets])
+    })
+    
+    return outline
+
 # 加载slide_type定义
 _SLIDE_TYPE_JSON_PATH = Path(__file__).parent / "slide_type.json"
 _SLIDE_TYPES_DATA = None
@@ -593,13 +824,18 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
         for idx, s in enumerate(slides, start=1):
             s.index = idx
         
-        return PPTOutline(
+        outline = PPTOutline(
             deck_title=f"{req.subject or '未指定学科'}：{_deck_title(req)}",
             subject=req.subject or "未指定学科",
             knowledge_points=req.kp_names or ["未指定知识点"],
             teaching_scene=req.teaching_scene,
             slides=slides,
         )
+        
+        # 同步后处理assets：补充size/style字段（同步函数，不生成描述）
+        outline = _post_process_outline_assets_sync(outline)
+        
+        return outline
     
     # Fallback: 原有的确定性逻辑
     title = _deck_title(req)
@@ -864,13 +1100,18 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
     for idx, s in enumerate(slides, start=1):
         s.index = idx
 
-    return PPTOutline(
+    outline = PPTOutline(
         deck_title=f"{subj}：{title}",
         subject=subj,
         knowledge_points=kps,
         teaching_scene=req.teaching_scene,
         slides=slides,
     )
+    
+    # 同步后处理assets：补充size/style字段（同步函数，不生成描述）
+    outline = _post_process_outline_assets_sync(outline)
+    
+    return outline
 
 
 # ============================================================================
@@ -1098,6 +1339,9 @@ async def generate_outline_from_distribution(
         "distribution_used": req.estimated_page_distribution.model_dump()
     })
     
+    # 后处理assets：生成描述、补充size/style字段
+    outline = await _post_process_outline_assets(outline, req, llm, logger, session_id)
+    
     return outline
 
 
@@ -1203,6 +1447,9 @@ async def generate_outline_structure(
         
         # Adjust count to match target (important for user-specified page counts)
         outline = _adjust_outline_to_target_count(outline, req.slide_requirements.target_count)
+        
+        # 后处理assets：生成描述、补充size/style字段
+        outline = await _post_process_outline_assets(outline, req, llm, logger, session_id)
         
         return outline
         
@@ -1321,12 +1568,32 @@ async def expand_slide_details(
         slide.assets = parsed.get("assets", slide.assets) if parsed else slide.assets
         slide.interactions = parsed.get("interactions", slide.interactions) if parsed else slide.interactions
         
+        # 确保assets包含size和style字段，并为diagram/photo生成描述
+        processed_assets = []
+        for asset in slide.assets:
+            asset = _ensure_asset_fields(asset.copy())
+            # 为diagram和photo类型生成描述（如果LLM可用）
+            if llm and llm.is_enabled():
+                # 需要logger和session_id，但expand_slide_details没有这些参数
+                # 暂时只补充字段，描述生成在后续统一处理
+                pass
+            processed_assets.append(asset)
+        slide.assets = processed_assets
+        
         return slide
         
     except Exception as e:
         print(f"[ERROR] expand_slide {slide.index}: {e}")
         # Provide fallback bullets on error (使用更有意义的内容)
         slide.bullets = _generate_fallback_bullets(slide.slide_type, slide.title, deck_context)
+        
+        # 确保assets包含size和style字段
+        processed_assets = []
+        for asset in slide.assets:
+            asset = _ensure_asset_fields(asset.copy())
+            processed_assets.append(asset)
+        slide.assets = processed_assets
+        
         return slide
 
 
@@ -1428,6 +1695,9 @@ async def generate_outline_with_llm(
         
         # 后处理：使用LLM更准确地判断每页的slide_type
         outline = await _refine_slide_types(outline, llm, logger, session_id)
+        
+        # 后处理assets：生成描述、补充size/style字段
+        outline = await _post_process_outline_assets(outline, req, llm, logger, session_id)
         
         return outline
         

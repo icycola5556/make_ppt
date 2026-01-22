@@ -68,21 +68,43 @@ const isEditing = ref(false)
 const editTitle = ref('')
 const editBullets = ref('')
 
-// Slide type styling
+// Slide type styling - 完整的中文映射和颜色
 const slideTypeMap = {
   title: { label: '封面', color: '#3b82f6' },
+  cover: { label: '封面', color: '#3b82f6' },
+  intro: { label: '导入', color: '#14b8a6' },
   objectives: { label: '目标', color: '#10b981' },
   concept: { label: '概念', color: '#8b5cf6' },
   content: { label: '内容', color: '#6366f1' },
+  principle: { label: '原理', color: '#7c3aed' },
   steps: { label: '步骤', color: '#f59e0b' },
+  practice: { label: '实践', color: '#f97316' },
+  process: { label: '流程', color: '#eab308' },
   comparison: { label: '对比', color: '#ef4444' },
+  case: { label: '案例', color: '#dc2626' },
+  case_compare: { label: '案例对比', color: '#b91c1c' },
   tools: { label: '工具', color: '#06b6d4' },
+  data: { label: '数据', color: '#0891b2' },
+  chart: { label: '图表', color: '#0284c7' },
   summary: { label: '总结', color: '#84cc16' },
-  exercise: { label: '练习', color: '#ec4899' }
+  bridge: { label: '过渡', color: '#a3a3a3' },
+  transition: { label: '过渡', color: '#a3a3a3' },
+  agenda: { label: '议程', color: '#64748b' },
+  qa: { label: '问答', color: '#a855f7' },
+  discussion: { label: '讨论', color: '#c026d3' },
+  exercise: { label: '练习', color: '#ec4899' },
+  exercises: { label: '练习', color: '#ec4899' },
+  warning: { label: '注意', color: '#ea580c' },
+  reference: { label: '参考', color: '#78716c' },
+  appendix: { label: '附录', color: '#737373' },
+  subtitle: { label: '副标题', color: '#4b5563' },
+  structure: { label: '结构', color: '#4f46e5' },
+  map: { label: '地图', color: '#059669' }
 }
 
+// 使用 fallback 避免显示英文
 const slideTypeLabel = computed(() => {
-  return slideTypeMap[props.slide.slide_type]?.label || props.slide.slide_type
+  return slideTypeMap[props.slide.slide_type]?.label || '页面'
 })
 
 const slideTypeColor = computed(() => {

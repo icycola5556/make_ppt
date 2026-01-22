@@ -182,100 +182,12 @@ def get_logs(session_id: str):
 
 @app.get("/api/slide-types")
 def get_slide_types():
-    """返回幻灯片类型元数据，用于前端展示标签和描述"""
-    slide_types = [
-        {
-            "slide_type": "title",
-            "name": "封面",
-            "description": "课程标题页",
-            "instruction": "展示课程主题和基本信息",
-        },
-        {
-            "slide_type": "cover",
-            "name": "封面",
-            "description": "课程封面页",
-            "instruction": "展示课程主题",
-        },
-        {
-            "slide_type": "objectives",
-            "name": "目标",
-            "description": "教学目标页",
-            "instruction": "列出本次课程的学习目标",
-        },
-        {
-            "slide_type": "concept",
-            "name": "概念",
-            "description": "概念讲解页",
-            "instruction": "讲解核心概念和原理",
-        },
-        {
-            "slide_type": "content",
-            "name": "内容",
-            "description": "内容展示页",
-            "instruction": "展示详细内容",
-        },
-        {
-            "slide_type": "steps",
-            "name": "步骤",
-            "description": "操作步骤页",
-            "instruction": "展示操作流程和步骤",
-        },
-        {
-            "slide_type": "practice",
-            "name": "实践",
-            "description": "实践操作页",
-            "instruction": "展示实操内容",
-        },
-        {
-            "slide_type": "comparison",
-            "name": "对比",
-            "description": "对比分析页",
-            "instruction": "对比不同方案或概念",
-        },
-        {
-            "slide_type": "case",
-            "name": "案例",
-            "description": "案例分析页",
-            "instruction": "展示实际案例",
-        },
-        {
-            "slide_type": "tools",
-            "name": "工具",
-            "description": "工具展示页",
-            "instruction": "展示相关工具或设备",
-        },
-        {
-            "slide_type": "summary",
-            "name": "总结",
-            "description": "课程总结页",
-            "instruction": "总结本次课程要点",
-        },
-        {
-            "slide_type": "bridge",
-            "name": "过渡",
-            "description": "过渡页",
-            "instruction": "连接不同章节",
-        },
-        {
-            "slide_type": "agenda",
-            "name": "议程",
-            "description": "议程页",
-            "instruction": "展示课程安排",
-        },
-        {
-            "slide_type": "qa",
-            "name": "问答",
-            "description": "问答互动页",
-            "instruction": "课堂互动和提问",
-        },
-        {
-            "slide_type": "exercise",
-            "name": "练习",
-            "description": "练习页",
-            "instruction": "展示练习题目",
-        },
-    ]
-    return {"slide_types": slide_types}
+    """返回幻灯片类型元数据，用于前端展示标签和描述
+    
+    直接从 slide_type.json 读取，确保与 LLM 约束使用的数据一致
+    """
+    from .modules.outline.core import get_slide_types as load_slide_types
+    return load_slide_types()
 
 
 class StyleRefineRequest(BaseModel):
@@ -493,12 +405,72 @@ async def expand_slide_detail_endpoint(req: SlideExpandRequest):
         # Actually Python objects are passed by reference, so modifying 'target_slide' modifies 'state.outline.slides[i]'
         # We just need to save state.
         state.outline.slides[req.slide_index] = expanded_slide
+        
+        # 对扩展后的slide进行assets后处理（生成描述）
+        if llm.is_enabled():
+            from .modules.outline.core import _process_slide_assets
+            processed_slide = await _process_slide_assets(
+                expanded_slide,
+                state.teaching_request,
+                llm,
+                logger,
+                req.session_id
+            )
+            state.outline.slides[req.slide_index] = processed_slide
+            expanded_slide = processed_slide
+        
         store.save(state)
-
         return SlideExpandResponse(ok=True, slide=expanded_slide)
 
     except Exception as e:
+        logger.emit(req.session_id, "3.3", "expand_slide_error", {"error": str(e), "slide_index": req.slide_index})
         return SlideExpandResponse(ok=False, slide=None, error=str(e))
+
+
+class OutlinePostProcessRequest(BaseModel):
+    session_id: str
+
+class OutlinePostProcessResponse(BaseModel):
+    ok: bool
+    outline: Optional[PPTOutline] = None
+    error: Optional[str] = None
+
+@app.post("/api/workflow/outline/post-process", response_model=OutlinePostProcessResponse)
+async def post_process_outline_endpoint(req: OutlinePostProcessRequest):
+    """在所有slides扩展完成后，统一进行assets后处理（生成描述、补充字段）"""
+    try:
+        from .modules.outline.core import _post_process_outline_assets
+        
+        state = store.load(req.session_id)
+        if not state or not state.outline:
+            return OutlinePostProcessResponse(ok=False, outline=None, error="No outline found")
+        
+        if not state.teaching_request:
+            return OutlinePostProcessResponse(ok=False, outline=None, error="No teaching request found")
+        
+        # 对outline进行完整的assets后处理
+        processed_outline = await _post_process_outline_assets(
+            state.outline,
+            state.teaching_request,
+            llm,
+            logger,
+            req.session_id
+        )
+        
+        # 更新state
+        state.outline = processed_outline
+        store.save(state)
+        
+        logger.emit(req.session_id, "3.3", "outline_post_processed", {
+            "total_slides": len(processed_outline.slides),
+            "slides_with_assets": len([s for s in processed_outline.slides if s.assets])
+        })
+        
+        return OutlinePostProcessResponse(ok=True, outline=processed_outline)
+        
+    except Exception as e:
+        logger.emit(req.session_id, "3.3", "post_process_error", {"error": str(e)})
+        return OutlinePostProcessResponse(ok=False, outline=None, error=str(e))
 
 
 # =============================================================================

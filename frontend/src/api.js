@@ -87,6 +87,13 @@ export const api = {
     })
   },
 
+  postProcessOutline(session_id) {
+    return http('/api/workflow/outline/post-process', {
+      method: 'POST',
+      body: { session_id }
+    })
+  },
+
   renderSlides(session_id) {
     return http('/api/workflow/render', {
       method: 'POST',
