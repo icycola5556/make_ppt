@@ -537,6 +537,64 @@ OUTLINE_PLANNING_SYSTEM_PROMPT = _build_outline_planning_prompt()
 # 基于3.1预估分布的页面生成
 # ============================================================================
 
+def _calculate_content_specificity(bullets: List[str], context: Dict[str, Any]) -> float:
+    """
+    计算bullets内容的特异性评分（0-1）。
+    
+    用于判断内容是否足够具体，避免用通用模板内容覆盖更好的专业内容。
+    
+    评分规则：
+    - 包含知识点名称: +0.3
+    - 包含具体数字/公式: +0.2
+    - 包含专业术语: +0.2
+    - 不包含通用模板词汇: +0.3
+    """
+    if not bullets:
+        return 0.0
+    
+    score = 0.0
+    
+    # 知识点名称
+    kp_names = context.get("knowledge_points", [])
+    if kp_names:
+        for bullet in bullets:
+            if any(kp in bullet for kp in kp_names):
+                score += 0.3
+                break
+    
+    # 具体数字或公式
+    import re
+    has_numbers = any(re.search(r'\d+(?:\.\d+)?(?:[%℃°MPa]|分钟|小时|页|步|个)?', b) for b in bullets)
+    if has_numbers:
+        score += 0.2
+    
+    # 专业术语（基于常见高职专业词汇）
+    professional_terms = [
+        "原理", "公式", "参数", "规范", "标准", "流程", "工艺",
+        "设备", "工具", "材料", "检测", "维护", "操作", "安装",
+        "故障", "诊断", "修复", "调试", "校准", "验收"
+    ]
+    has_professional_terms = any(
+        term in bullet for bullet in bullets for term in professional_terms
+    )
+    if has_professional_terms:
+        score += 0.2
+    
+    # 检查是否包含通用模板词汇（应该扣分）
+    generic_phrases = [
+        "核心概念", "能够运用", "解决实际问题", "培养专业精神",
+        "待编辑", "待补充", "待填充", "本课程", "本知识点",
+        "核心收获", "重点回顾", "核心内容"
+    ]
+    has_generic = any(
+        phrase in bullet for bullet in bullets for phrase in generic_phrases
+    )
+    if not has_generic:
+        score += 0.3
+    
+    return min(score, 1.0)
+
+
 def _has_valid_distribution(dist) -> bool:
     """检查预估分布是否有效（总页数大于基础页数）"""
     if dist is None:
@@ -805,6 +863,64 @@ def _build_slides_from_distribution(req: TeachingRequest) -> List[OutlineSlide]:
     )
     
     return slides
+
+
+# ============================================================================
+# 统一大纲生成入口 (Unified Entry Point)
+# ============================================================================
+
+async def create_outline(
+    req: TeachingRequest,
+    llm: Any = None,
+    logger: Any = None,
+    session_id: str = "",
+    style_name: Optional[str] = None,
+) -> PPTOutline:
+    """
+    统一的大纲生成入口函数。
+    
+    根据条件自动选择最佳生成策略：
+    1. 如果有有效的预估分布且LLM可用 -> generate_outline_from_distribution
+    2. 如果LLM可用但无预估分布 -> generate_outline_structure + expand_slide_details
+    3. 否则 -> 确定性生成 generate_outline
+    
+    Args:
+        req: 教学需求
+        llm: LLM客户端（可选）
+        logger: 日志记录器（可选）
+        session_id: 会话ID
+        style_name: 样式名称（可选）
+        
+    Returns:
+        PPTOutline
+    """
+    has_valid_dist = _has_valid_distribution(req.estimated_page_distribution)
+    llm_available = llm is not None and llm.is_enabled()
+    
+    # 日志记录选择的路径
+    if logger and session_id:
+        logger.emit(session_id, "3.3", "create_outline_strategy", {
+            "has_valid_distribution": has_valid_dist,
+            "llm_available": llm_available,
+            "target_count": req.slide_requirements.target_count if req.slide_requirements else None
+        })
+    
+    # 策略1: 基于预估分布 + LLM优化（最佳质量）
+    if has_valid_dist and llm_available:
+        if logger:
+            logger.emit(session_id, "3.3", "using_strategy", {"strategy": "distribution_based"})
+        return await generate_outline_from_distribution(req, llm, logger, session_id, style_name)
+    
+    # 策略2: 拆分工作流（LLM可用但无有效分布）
+    if llm_available and not has_valid_dist:
+        if logger:
+            logger.emit(session_id, "3.3", "using_strategy", {"strategy": "split_workflow"})
+        return await generate_outline_structure(req, style_name, llm, logger, session_id)
+    
+    # 策略3: 确定性生成（兜底）
+    if logger:
+        logger.emit(session_id, "3.3", "using_strategy", {"strategy": "deterministic"})
+    return generate_outline(req, style_name)
 
 
 def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPTOutline:
@@ -1296,10 +1412,19 @@ async def generate_outline_from_distribution(
                     temperature=0.5,
                 )
                 
-                # 更新页面内容
+                # 更新页面内容 - 使用特异性评分决定是否覆盖
                 if parsed:
-                    if parsed.get("bullets") and len(parsed["bullets"]) >= 2:
-                        slide.bullets = parsed["bullets"]
+                    new_bullets = parsed.get("bullets", [])
+                    if new_bullets and len(new_bullets) >= 2:
+                        # 计算原始和新内容的特异性评分
+                        original_score = _calculate_content_specificity(slide.bullets, deck_context)
+                        new_score = _calculate_content_specificity(new_bullets, deck_context)
+                        
+                        # 只有当新内容评分更高或原始内容过于通用时才覆盖
+                        if new_score > original_score or original_score < 0.3:
+                            slide.bullets = new_bullets
+                        # 否则保留原有更具体的内容
+                    
                     if parsed.get("assets"):
                         slide.assets = parsed["assets"]
                     if parsed.get("interactions"):

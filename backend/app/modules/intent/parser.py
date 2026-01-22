@@ -71,14 +71,41 @@ PROFESSIONAL_KEYWORDS: Dict[str, List[str]] = {
     }
 
 # Slide count coefficient by category (from research)
+# 系数含义：
+# - > 1.0: 该领域需要更多页数（如实操类需要展示步骤、图解）
+# - 1.0: 标准页数
+# - < 1.0: 该领域内容密度高，可以用更少页数（如理论推导类）
 CATEGORY_SLIDE_COEFFICIENT: Dict[str, float] = {
-    "engineering": 1.0,
-    "medical": 1.0,
-    "agriculture": 1.0,
-    "arts": 1.2,
-    "business": 1.0,
-    "science": 0.8,
-    "civil": 1.3,
+    # 工科/实操类 - 需要展示设备、步骤、安全提示
+    "engineering": 1.0,     # 机械/电气/制造
+    "civil": 1.3,           # 土木/建筑 - 需要大量图纸、施工步骤
+    "transportation": 1.2,  # 交通运输 - 需要展示设备操作流程
+    "resources": 1.1,       # 地质/矿业 - 需要图表和安全说明
+    "water": 1.1,           # 水利水电 - 需要工程图和流程
+    
+    # 医护/服务类 - 需要展示操作规范、案例
+    "medical": 1.0,         # 医学/护理 - 需要步骤和注意事项
+    "food": 1.0,            # 食品/制药 - 需要流程和规范
+    "public-service": 1.0,  # 公共服务 - 需要案例和流程
+    
+    # 商科/管理类 - 图表和案例分析
+    "business": 1.0,        # 会计/电商/金融
+    "tourism": 1.0,         # 旅游/酒店
+    
+    # 理论/推导类 - 内容密度高，页数可以少一些
+    "science": 0.8,         # 数学/物理/计算机 - 公式推导可以密集
+    "agriculture": 1.0,     # 农林 - 理论与实践结合
+    
+    # 艺术/创意类 - 需要更多视觉展示
+    "arts": 1.2,            # 设计/音乐/舞蹈 - 需要图片和示例
+    "media": 1.1,           # 新闻/影视 - 需要案例展示
+    "textile": 1.0,         # 纺织/服装
+    
+    # 公共安全类 - 需要案例和规范
+    "public-security": 1.0, # 公安/法律
+    "sports": 1.0,          # 体育/运动
+    
+    # 默认
     "unknown": 1.0,
 }
 
@@ -445,6 +472,42 @@ def generate_final_confirm_summary(req: TeachingRequest) -> str:
 
 
 # ============================================================================
+# Teaching Scene Assessment
+# ============================================================================
+
+def _assess_teaching_scene(user_text: str, knowledge_points: List[KnowledgePointDetail]) -> str:
+    """智能识别教学场景"""
+    text_lower = user_text.lower()
+
+    # 实践课关键词
+    practice_keywords = ["实训", "实操", "操作", "动手", "实验", "练习", "技能", "步骤", "方法"]
+    # 复习课关键词
+    review_keywords = ["复习", "回顾", "总结", "巩固", "考前", "重温", "温习"]
+    # 理论课关键词
+    theory_keywords = ["理论", "原理", "概念", "基础", "知识", "讲解", "介绍", "定义"]
+
+    # 检查实践关键词
+    if any(kw in text_lower for kw in practice_keywords):
+        return "practice"
+
+    # 检查复习关键词
+    if any(kw in text_lower for kw in review_keywords):
+        return "review"
+
+    # 检查理论关键词
+    if any(kw in text_lower for kw in theory_keywords):
+        return "theory"
+
+    # 检查知识点类型
+    if knowledge_points:
+        if any(kp.type == "practice" for kp in knowledge_points):
+            return "practice"
+
+    # 默认返回理论课
+    return "theory"
+
+
+# ============================================================================
 # Heuristic Parser (Enhanced)
 # ============================================================================
 
@@ -500,38 +563,6 @@ def heuristic_parse(user_text: str) -> TeachingRequest:
 
     # teaching scene - 智能识别
     scene = _assess_teaching_scene(t, kps)
-
-
-def _assess_teaching_scene(user_text: str, knowledge_points: List[KnowledgePointDetail]) -> str:
-    """智能识别教学场景"""
-    text_lower = user_text.lower()
-
-    # 实践课关键词
-    practice_keywords = ["实训", "实操", "操作", "动手", "实验", "练习", "技能", "步骤", "方法"]
-    # 复习课关键词
-    review_keywords = ["复习", "回顾", "总结", "巩固", "考前", "重温", "温习"]
-    # 理论课关键词
-    theory_keywords = ["理论", "原理", "概念", "基础", "知识", "讲解", "介绍", "定义"]
-
-    # 检查实践关键词
-    if any(kw in text_lower for kw in practice_keywords):
-        return "practice"
-
-    # 检查复习关键词
-    if any(kw in text_lower for kw in review_keywords):
-        return "review"
-
-    # 检查理论关键词
-    if any(kw in text_lower for kw in theory_keywords):
-        return "theory"
-
-    # 检查知识点类型
-    if knowledge_points:
-        if any(kp.type == "practice" for kp in knowledge_points):
-            return "practice"
-
-    # 默认返回理论课
-    return "theory"
 
     # slide count
     target_count = None
