@@ -107,13 +107,22 @@ const editScript = ref('')
 const editBullets = ref('')
 const editSuggestions = ref('')
 
-// Slide type label
+// Slide type label - 完整的中文映射
 const slideTypeMap = {
-  title: '封面', objectives: '目标', concept: '概念', content: '内容',
-  steps: '步骤', comparison: '对比', tools: '工具', summary: '总结', exercise: '练习'
+  title: '封面', cover: '封面', intro: '导入', objectives: '目标', 
+  concept: '概念', content: '内容', principle: '原理',
+  steps: '步骤', practice: '实践', process: '流程',
+  comparison: '对比', case: '案例', case_compare: '案例对比',
+  tools: '工具', data: '数据', chart: '图表',
+  summary: '总结', bridge: '过渡', transition: '过渡',
+  agenda: '议程', qa: '问答', discussion: '讨论',
+  exercise: '练习', exercises: '练习', warning: '注意',
+  reference: '参考', appendix: '附录', subtitle: '副标题',
+  structure: '结构', map: '地图'
 }
 
-const slideTypeLabel = computed(() => slideTypeMap[props.slide.slide_type] || props.slide.slide_type)
+// 使用 fallback 避免显示英文
+const slideTypeLabel = computed(() => slideTypeMap[props.slide.slide_type] || '页面')
 
 const statusClass = computed(() => ({
   'is-loading': props.status === 'loading',
