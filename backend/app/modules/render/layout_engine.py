@@ -17,6 +17,7 @@ async def resolve_layout(
     page: SlidePage,
     teaching_request: TeachingRequest,
     page_index: int,
+    previous_layout: Optional[str] = None,  # 🆕 前一页布局，用于避免重复
     llm: Optional[LLMClient] = None
 ) -> Tuple[str, List[ImageSlotRequest]]:
     """
@@ -26,6 +27,7 @@ async def resolve_layout(
         page: 页面数据 (来自 3.4 模块)
         teaching_request: 教学需求 (来自 3.1 模块)
         page_index: 页面索引
+        previous_layout: 前一页使用的布局ID (用于避免重复)
         llm: LLM客户端 (可选)
     
     Returns:
@@ -40,18 +42,22 @@ async def resolve_layout(
     # === 第二层: LLM 语义分析 (Semantic Agent) ===
     if llm and llm.is_enabled():
         try:
-            layout_id = await _analyze_with_llm(page, teaching_request, llm)
+            layout_id = await _analyze_with_llm(page, teaching_request, llm, previous_layout)
         except Exception as e:
             print(f"Layout Agent failed for page {page_index}: {e}")
             # Fallback to rules if LLM fails
-            layout_id = _score_and_select(page, teaching_request)
+            layout_id = _score_and_select(page, teaching_request, previous_layout)
     else:
         # Fallback to rules if LLM not provided/enabled
         # === Legacy Second Layer: 关键词语义匹配 ===
         layout_id = _match_by_keywords(page)
         if not layout_id:
             # === Legacy Third Layer: 元素特征分析 + 计分 ===
-            layout_id = _score_and_select(page, teaching_request)
+            layout_id = _score_and_select(page, teaching_request, previous_layout)
+    
+    # === 第三层: 避免重复布局 ===
+    if layout_id == previous_layout and previous_layout is not None:
+        layout_id = _find_alternative_layout(layout_id, page, teaching_request)
     
     # === 第四层: 文本溢出检查和降级 (Safety Net) ===
     # 无论来源如何，最后都做一次安全检查
@@ -70,8 +76,8 @@ LAYOUT_AGENT_SCHEMA_HINT = """{
 }"""
 
 
-async def _analyze_with_llm(page: SlidePage, req: TeachingRequest, llm: LLMClient) -> Optional[str]:
-    """Invokes the Layout Decision Agent"""
+async def _analyze_with_llm(page: SlidePage, req: TeachingRequest, llm: LLMClient, previous_layout: Optional[str] = None) -> Optional[str]:
+    """Invokes the Layout Decision Agent with anti-repetition context"""
     
     # Prepare Context
     slide_content = {
@@ -86,7 +92,9 @@ async def _analyze_with_llm(page: SlidePage, req: TeachingRequest, llm: LLMClien
     
     user_msg = json.dumps({
         "slide_content": slide_content,
-        "available_layouts": available_layouts
+        "available_layouts": available_layouts,
+        "previous_layout": previous_layout,  # 🆕 传递前一页布局
+        "avoid_if_possible": [previous_layout] if previous_layout else [],
     }, ensure_ascii=False)
     
     # Call LLM
@@ -123,6 +131,35 @@ def _map_by_slide_type(slide_type: str) -> Optional[str]:
     }
     return TYPE_LAYOUT_MAP.get(slide_type)
 
+
+def _find_alternative_layout(current: str, page: SlidePage, req: TeachingRequest) -> str:
+    """
+    当当前布局与前一页重复时，寻找替代布局
+    
+    策略：基于内容特征选择最佳替代
+    """
+    # 定义布局替代组
+    ALTERNATIVES = {
+        "title_bullets_right_img": ["center_visual", "split_vertical", "operation_steps"],
+        "operation_steps": ["timeline_horizontal", "title_bullets_right_img", "split_vertical"],
+        "concept_comparison": ["table_comparison", "grid_4", "center_visual"],
+        "grid_4": ["concept_comparison", "center_visual", "split_vertical"],
+        "title_bullets": ["title_bullets_right_img", "table_comparison", "center_visual"],
+        "table_comparison": ["concept_comparison", "title_bullets", "grid_4"],
+        "timeline_horizontal": ["operation_steps", "title_bullets", "split_vertical"],
+        "center_visual": ["title_bullets_right_img", "split_vertical", "operation_steps"],
+        "split_vertical": ["center_visual", "title_bullets_right_img", "operation_steps"],
+    }
+    
+    candidates = ALTERNATIVES.get(current, ["title_bullets_right_img", "center_visual"])
+    
+    # 返回第一个可用的替代
+    for alt in candidates:
+        if alt in VOCATIONAL_LAYOUTS:
+            return alt
+    
+    return "title_bullets"  # 最终回退
+
 def _match_by_keywords(page: SlidePage) -> Optional[str]:
     """关键词语义匹配 (Legacy)"""
     title_text = page.title.lower() if page.title else ""
@@ -141,7 +178,7 @@ def _match_by_keywords(page: SlidePage) -> Optional[str]:
     
     return None
 
-def _score_and_select(page: SlidePage, req: TeachingRequest) -> str:
+def _score_and_select(page: SlidePage, req: TeachingRequest, previous_layout: Optional[str] = None) -> str:
     """计分机制选择布局"""
     
     # 提取特征
@@ -156,8 +193,10 @@ def _score_and_select(page: SlidePage, req: TeachingRequest) -> str:
     # 规则 1: 教学场景加分
     if req.teaching_scene == "practice":
         scores["operation_steps"] += 50
+        scores["timeline_horizontal"] += 30  # 🆕 时间轴也适合实训
     elif req.teaching_scene == "theory":
         scores["title_bullets_right_img"] += 30
+        scores["table_comparison"] += 25  # 🆕 表格适合理论对比
     
     # 规则 2: 图片数量
     if image_count >= 4:
@@ -166,6 +205,8 @@ def _score_and_select(page: SlidePage, req: TeachingRequest) -> str:
         scores["concept_comparison"] += 50
     elif image_count == 1:
         scores["title_bullets_right_img"] += 40
+        scores["center_visual"] += 35  # 🆕 单图可用中心视觉
+        scores["split_vertical"] += 30  # 🆕 也可用上下分栏
         scores["operation_steps"] += 30
     
     # 规则 3: 要点数量
@@ -180,11 +221,15 @@ def _score_and_select(page: SlidePage, req: TeachingRequest) -> str:
     if text_len > 400:
         scores["title_bullets"] -= 50  # 降低纯文本布局分数
     
+    # 🆕 规则 5: 避免与前一页重复
+    if previous_layout and previous_layout in scores:
+        scores[previous_layout] -= 80  # 大幅降低前一页布局的分数
+    
     # 返回最高分
     return max(scores, key=scores.get)
 
 def _check_text_overflow_and_downgrade(page: SlidePage, layout_id: Optional[str]) -> str:
-    """检查文本溢出并降级"""
+    """检查文本溢出并智能降级"""
     if not layout_id:
         return "title_bullets" # Default
         
@@ -192,13 +237,40 @@ def _check_text_overflow_and_downgrade(page: SlidePage, layout_id: Optional[str]
     if not config:
         return "title_bullets"
 
+    # 1. 标题长度检查
+    if len(page.title or "") > 45 and layout_id != "title_only":
+        # 标题过长，建议使用通用的标题+要点布局
+        return "title_bullets"
+
+    # 2. 要点特征分析
+    bullets = []
+    for elem in page.elements:
+        if elem.type == "bullets" and isinstance(elem.content, dict):
+            bullets.extend(elem.content.get("items", []))
+        elif elem.type == "text" and isinstance(elem.content, dict):
+            text = elem.content.get("text", "")
+            if text: bullets.append(text)
+    
+    # 3. 检查单条要点长度 (Hard Limit for vocational layouts)
+    if any(len(str(b)) > 110 for b in bullets):
+        # 存在超长要点，降级到空间更大的通用布局
+        return "title_bullets"
+
+    # 4. 检查总字符数
     text_len = _calculate_text_length(page)
     
-    # 1. Check strict text length limit if defined
-    if config.max_text_length and text_len > config.max_text_length + 50: # Allow small buffer
+    # 针对不同布局的具体限制
+    max_len = {
+        "title_bullets_right_img": 350,
+        "operation_steps": 300,
+        "concept_comparison": 250,
+        "grid_4": 200,
+    }.get(layout_id, 500)
+
+    if text_len > max_len + 50: # 给予一丁点缓冲区
          return "title_bullets"
     
-    # 2. Universal hard limit
+    # 全局强制硬限制
     if text_len > 600:
         return "title_bullets"
     
@@ -206,17 +278,19 @@ def _check_text_overflow_and_downgrade(page: SlidePage, layout_id: Optional[str]
 
 
 def _calculate_text_length(page: SlidePage) -> int:
-    """计算页面文本总长度"""
+    """计算页面文本总长度 (逻辑与 html_renderer 中的 _extract_bullets 保持语义一致)"""
     total = len(page.title) if page.title else 0
     for elem in page.elements:
-        if elem.type in ["text", "bullets"]:
-            if isinstance(elem.content, dict):
-                if "text" in elem.content:
-                    total += len(str(elem.content["text"]))
-                if "items" in elem.content:
-                    total += sum(len(str(item)) for item in elem.content["items"])
-            else:
-                total += len(str(elem.content))
+        if isinstance(elem.content, dict):
+            # 统计文字内容
+            if "text" in elem.content:
+                total += len(str(elem.content["text"]))
+            if "items" in elem.content:
+                total += sum(len(str(item)) for item in elem.content["items"])
+            if "question" in elem.content:
+                total += len(str(elem.content["question"]))
+        else:
+            total += len(str(elem.content))
     return total
 
 

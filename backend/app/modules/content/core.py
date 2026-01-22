@@ -281,6 +281,67 @@ def _chunk_pages(pages: List[SlidePage], size: int) -> List[List[SlidePage]]:
 
 
 # ============================================================================
+# 内容审核 (P2: 内化到 3.4 模块)
+# ============================================================================
+
+def _review_and_fix_page(
+    page: SlidePage,
+    outline: OutlineSlide,
+    req: TeachingRequest
+) -> SlidePage:
+    """
+    内置内容审核 - 生成时自动检查质量问题
+    
+    检查项：
+    1. 要点数量 (2-6个)
+    2. 占位符残留
+    3. 内容长度
+    
+    问题会写入 speaker_notes 供教师查看
+    """
+    issues = []
+    
+    # 1. 检查要点数量
+    for elem in page.elements:
+        if elem.type == "bullets" and isinstance(elem.content, dict):
+            items = elem.content.get("items", [])
+            if len(items) < 2 and page.slide_type not in ("title", "cover", "bridge"):
+                issues.append(f"要点数量不足 ({len(items)}个，建议2-6个)")
+            if len(items) > 6:
+                issues.append(f"要点过多 ({len(items)}个，建议精简至6个以内)")
+    
+    # 2. 检查占位符残留
+    placeholder_patterns = ["____", "TODO", "待填充", "___", "[待定]"]
+    for elem in page.elements:
+        content_str = str(elem.content)
+        for pattern in placeholder_patterns:
+            if pattern in content_str:
+                issues.append(f"发现未填充占位符: '{pattern}'")
+                break
+    
+    # 3. 检查内容与大纲匹配度
+    if outline.bullets:
+        outline_bullet_count = len(outline.bullets)
+        page_bullets = []
+        for elem in page.elements:
+            if elem.type == "bullets" and isinstance(elem.content, dict):
+                page_bullets.extend(elem.content.get("items", []))
+        
+        if len(page_bullets) < outline_bullet_count - 1:
+            issues.append(f"内容要点少于大纲 ({len(page_bullets)} vs {outline_bullet_count})")
+    
+    # 写入审核结果
+    if issues:
+        warning_text = "⚠️ 内容审核: " + "; ".join(issues)
+        if page.speaker_notes:
+            page.speaker_notes = warning_text + "\n---\n" + page.speaker_notes
+        else:
+            page.speaker_notes = warning_text
+    
+    return page
+
+
+# ============================================================================
 # Per-Page Content Generation (方案B核心实现)
 # ============================================================================
 
@@ -396,6 +457,10 @@ async def _generate_single_page(
         
         # Ensure index is preserved
         refined_page.index = page_index
+        
+        # 🆕 内置内容审核
+        refined_page = _review_and_fix_page(refined_page, page_outline, req)
+        
         return refined_page
         
     except Exception as e:
