@@ -3,7 +3,21 @@
 """
 
 import pytest
-from app.common.schemas import SlidePage, SlideElement, TeachingRequest
+from app.common.schemas import (
+    SlidePage,
+    SlideElement,
+    TeachingRequest,
+    TeachingScenarioDetail,
+    SlideRequirementsDetail,
+    SubjectInfo,
+)
+from app.modules.render.layout_engine import (
+    resolve_layout,
+    _map_by_slide_type,
+    _match_by_keywords,
+    _score_and_select,
+    _calculate_text_length,
+)
 from app.modules.render.layout_engine import (
     resolve_layout,
     _map_by_slide_type,
@@ -18,9 +32,16 @@ def test_map_by_slide_type():
     assert _map_by_slide_type("title") == "title_only"
     assert _map_by_slide_type("cover") == "title_only"
     assert _map_by_slide_type("objectives") == "title_bullets"
-    assert _map_by_slide_type("steps") == "operation_steps"
-    assert _map_by_slide_type("comparison") == "concept_comparison"
-    assert _map_by_slide_type("tools") == "grid_4"
+    assert _map_by_slide_type("summary") == "title_bullets"
+    assert _map_by_slide_type("agenda") == "title_bullets"
+    # "steps" mapping removed - LLM decides based on context
+    assert _map_by_slide_type("steps") is None
+    assert (
+        _map_by_slide_type("comparison") is None
+    )  # No direct mapping, uses keyword matching
+    assert (
+        _map_by_slide_type("tools") is None
+    )  # No direct mapping, uses keyword matching
     assert _map_by_slide_type("unknown_type") is None
 
 
@@ -34,7 +55,7 @@ def test_match_by_keywords():
         elements=[],
     )
     assert _match_by_keywords(page) == "operation_steps"
-    
+
     # 测试对比关键词
     page = SlidePage(
         index=2,
@@ -43,7 +64,7 @@ def test_match_by_keywords():
         elements=[],
     )
     assert _match_by_keywords(page) == "concept_comparison"
-    
+
     # 测试工具关键词
     page = SlidePage(
         index=3,
@@ -52,7 +73,7 @@ def test_match_by_keywords():
         elements=[],
     )
     assert _match_by_keywords(page) == "grid_4"
-    
+
     # 测试无匹配
     page = SlidePage(
         index=4,
@@ -89,12 +110,14 @@ def test_calculate_text_length():
 def test_score_and_select_practice_scene():
     """测试实训场景的布局选择"""
     req = TeachingRequest(
-        subject="机械基础",
+        subject_info=SubjectInfo(
+            subject_name="机械基础", subject_category="engineering"
+        ),
         knowledge_points=[],
-        teaching_scene="practice",
-        slide_requirements={"target_count": 10},
+        teaching_scenario=TeachingScenarioDetail(scene_type="practice"),
+        slide_requirements=SlideRequirementsDetail(target_count=10),
     )
-    
+
     page = SlidePage(
         index=1,
         slide_type="concept",
@@ -112,7 +135,7 @@ def test_score_and_select_practice_scene():
             ),
         ],
     )
-    
+
     layout_id = _score_and_select(page, req)
     # 实训场景 + 1 张图片,应该选择包含图片的布局
     assert layout_id in ["operation_steps", "title_bullets_right_img"]
@@ -121,12 +144,14 @@ def test_score_and_select_practice_scene():
 def test_score_and_select_multiple_images():
     """测试多图片场景的布局选择"""
     req = TeachingRequest(
-        subject="机械基础",
+        subject_info=SubjectInfo(
+            subject_name="机械基础", subject_category="engineering"
+        ),
         knowledge_points=[],
-        teaching_scene="theory",
-        slide_requirements={"target_count": 10},
+        teaching_scenario=TeachingScenarioDetail(scene_type="theory"),
+        slide_requirements=SlideRequirementsDetail(target_count=10),
     )
-    
+
     page = SlidePage(
         index=1,
         slide_type="concept",
@@ -136,21 +161,24 @@ def test_score_and_select_multiple_images():
             for i in range(4)
         ],
     )
-    
+
     layout_id = _score_and_select(page, req)
     # 4 张图片,应该选择 grid_4
     assert layout_id == "grid_4"
 
 
-def test_resolve_layout_integration():
+@pytest.mark.asyncio
+async def test_resolve_layout_integration():
     """测试完整的布局选择流程"""
     req = TeachingRequest(
-        subject="机械基础",
+        subject_info=SubjectInfo(
+            subject_name="机械基础", subject_category="engineering"
+        ),
         knowledge_points=[],
-        teaching_scene="theory",
-        slide_requirements={"target_count": 10},
+        teaching_scenario=TeachingScenarioDetail(scene_type="theory"),
+        slide_requirements=SlideRequirementsDetail(target_count=10),
     )
-    
+
     # 测试 1: slide_type 强制映射
     page = SlidePage(
         index=1,
@@ -158,10 +186,10 @@ def test_resolve_layout_integration():
         title="课程标题",
         elements=[],
     )
-    layout_id, image_slots = resolve_layout(page, req, 1)
+    layout_id, image_slots = await resolve_layout(page, req, 1)
     assert layout_id == "title_only"
     assert len(image_slots) == 0  # title_only 无图片插槽
-    
+
     # 测试 2: 关键词匹配
     page = SlidePage(
         index=2,
@@ -175,20 +203,23 @@ def test_resolve_layout_integration():
             ),
         ],
     )
-    layout_id, image_slots = resolve_layout(page, req, 2)
+    layout_id, image_slots = await resolve_layout(page, req, 2)
     assert layout_id == "operation_steps"
     assert len(image_slots) == 1  # operation_steps 有 1 个图片插槽
 
 
-def test_text_overflow_check():
+@pytest.mark.asyncio
+async def test_text_overflow_check():
     """测试文本溢出检查"""
     req = TeachingRequest(
-        subject="机械基础",
+        subject_info=SubjectInfo(
+            subject_name="机械基础", subject_category="engineering"
+        ),
         knowledge_points=[],
-        teaching_scene="theory",
-        slide_requirements={"target_count": 10},
+        teaching_scenario=TeachingScenarioDetail(scene_type="theory"),
+        slide_requirements=SlideRequirementsDetail(target_count=10),
     )
-    
+
     # 创建超长文本页面
     long_text = "这是一段很长的文本。" * 60  # 约 600 字符
     page = SlidePage(
@@ -203,8 +234,8 @@ def test_text_overflow_check():
             ),
         ],
     )
-    
-    layout_id, _ = resolve_layout(page, req, 1)
+
+    layout_id, _ = await resolve_layout(page, req, 1)
     # 超长文本应该降级到 title_bullets
     assert layout_id == "title_bullets"
 

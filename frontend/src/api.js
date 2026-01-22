@@ -1,6 +1,8 @@
-const DEFAULT_BASE = 'http://127.0.0.1:8000'
+const DEFAULT_BASE = ''
 
-let currentBase = localStorage.getItem('api_base') || (import.meta.env.VITE_API_BASE || DEFAULT_BASE)
+// 强制清理可能残留的旧配置，确保使用代理
+localStorage.removeItem('api_base')
+let currentBase = import.meta.env.VITE_API_BASE || DEFAULT_BASE
 
 export function getApiBase() {
   return currentBase
@@ -90,6 +92,19 @@ export const api = {
       method: 'POST',
       body: { session_id }
     })
-  }
+  },
+
+  // ======= 3.5 图片生成 =======
+  triggerImageGeneration(session_id) {
+    return http(`/api/workflow/render/generate/${session_id}`, { method: 'POST' })
+  },
+
+  // ======= 3.5 Mock 数据渲染 =======
+  renderWithMockData(subject = 'mechanical') {
+    return http('/api/workflow/render/mock', {
+      method: 'POST',
+      body: { use_mock: true, subject }
+    })
+  },
 }
 

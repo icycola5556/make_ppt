@@ -13,16 +13,27 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 # 使用新的模块化导入
-from .common import LLMClient, WorkflowLogger, SessionStore, WorkflowRunRequest, WorkflowRunResponse
+from .common import (
+    LLMClient,
+    WorkflowLogger,
+    SessionStore,
+    WorkflowRunRequest,
+    WorkflowRunResponse,
+)
 from .orchestrator import WorkflowEngine
 from .common import (
-    LLMClient, WorkflowLogger, SessionStore, 
-    WorkflowRunRequest, WorkflowRunResponse,
-    StyleConfig, StyleSampleSlide
+    LLMClient,
+    WorkflowLogger,
+    SessionStore,
+    WorkflowRunRequest,
+    WorkflowRunResponse,
+    StyleConfig,
+    StyleSampleSlide,
 )
 from .orchestrator import WorkflowEngine
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
+
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -34,22 +45,46 @@ app = FastAPI(title="PPT Outline Workflow (3.1-3.4)")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "OPTIONS",
+    ],  # Explicitly list methods
     allow_headers=["*"],
 )
+
+
+# Test route - temporarily disable complex routes
+# @app.post("/api/test/simple")
+# async def test_simple():
+#     return {"message": "Simple test works"}
+#
+# @app.post("/api/test/param")
+# async def test_with_param(session_id: str = None):
+#     return {"message": f"Param test works: {session_id}"}
+#
+# @app.post("/api/another/test")
+# async def another_test(id: str = None):
+#     return {"message": f"Another test: {id}"}
+
 
 store = SessionStore(DATA_DIR)
 logger = WorkflowLogger(DATA_DIR)
 llm = LLMClient()
-print("[LLM]", {
-    "enabled": llm.is_enabled(),
-    "mode": llm.mode,
-    "base_url": llm.base_url,
-    "model": llm.model,
-    "has_key": bool(llm.api_key),
-})
+print(
+    "[LLM]",
+    {
+        "enabled": llm.is_enabled(),
+        "mode": llm.mode,
+        "base_url": llm.base_url,
+        "model": llm.model,
+        "has_key": bool(llm.api_key),
+    },
+)
 
 # 使用原版工作流引擎
 engine = WorkflowEngine(store, logger, llm)
@@ -117,7 +152,7 @@ async def run_workflow(req: WorkflowRunRequest):
         message = "已生成到模块3.4：页面内容。"
     else:
         message = "已生成到模块3.1：意图理解。"
-    
+
     return WorkflowRunResponse(
         session_id=req.session_id,
         status="ok",
@@ -149,29 +184,104 @@ def get_logs(session_id: str):
 def get_slide_types():
     """返回幻灯片类型元数据，用于前端展示标签和描述"""
     slide_types = [
-        {"slide_type": "title", "name": "封面", "description": "课程标题页", "instruction": "展示课程主题和基本信息"},
-        {"slide_type": "cover", "name": "封面", "description": "课程封面页", "instruction": "展示课程主题"},
-        {"slide_type": "objectives", "name": "目标", "description": "教学目标页", "instruction": "列出本次课程的学习目标"},
-        {"slide_type": "concept", "name": "概念", "description": "概念讲解页", "instruction": "讲解核心概念和原理"},
-        {"slide_type": "content", "name": "内容", "description": "内容展示页", "instruction": "展示详细内容"},
-        {"slide_type": "steps", "name": "步骤", "description": "操作步骤页", "instruction": "展示操作流程和步骤"},
-        {"slide_type": "practice", "name": "实践", "description": "实践操作页", "instruction": "展示实操内容"},
-        {"slide_type": "comparison", "name": "对比", "description": "对比分析页", "instruction": "对比不同方案或概念"},
-        {"slide_type": "case", "name": "案例", "description": "案例分析页", "instruction": "展示实际案例"},
-        {"slide_type": "tools", "name": "工具", "description": "工具展示页", "instruction": "展示相关工具或设备"},
-        {"slide_type": "summary", "name": "总结", "description": "课程总结页", "instruction": "总结本次课程要点"},
-        {"slide_type": "bridge", "name": "过渡", "description": "过渡页", "instruction": "连接不同章节"},
-        {"slide_type": "agenda", "name": "议程", "description": "议程页", "instruction": "展示课程安排"},
-        {"slide_type": "qa", "name": "问答", "description": "问答互动页", "instruction": "课堂互动和提问"},
-        {"slide_type": "exercise", "name": "练习", "description": "练习页", "instruction": "展示练习题目"},
+        {
+            "slide_type": "title",
+            "name": "封面",
+            "description": "课程标题页",
+            "instruction": "展示课程主题和基本信息",
+        },
+        {
+            "slide_type": "cover",
+            "name": "封面",
+            "description": "课程封面页",
+            "instruction": "展示课程主题",
+        },
+        {
+            "slide_type": "objectives",
+            "name": "目标",
+            "description": "教学目标页",
+            "instruction": "列出本次课程的学习目标",
+        },
+        {
+            "slide_type": "concept",
+            "name": "概念",
+            "description": "概念讲解页",
+            "instruction": "讲解核心概念和原理",
+        },
+        {
+            "slide_type": "content",
+            "name": "内容",
+            "description": "内容展示页",
+            "instruction": "展示详细内容",
+        },
+        {
+            "slide_type": "steps",
+            "name": "步骤",
+            "description": "操作步骤页",
+            "instruction": "展示操作流程和步骤",
+        },
+        {
+            "slide_type": "practice",
+            "name": "实践",
+            "description": "实践操作页",
+            "instruction": "展示实操内容",
+        },
+        {
+            "slide_type": "comparison",
+            "name": "对比",
+            "description": "对比分析页",
+            "instruction": "对比不同方案或概念",
+        },
+        {
+            "slide_type": "case",
+            "name": "案例",
+            "description": "案例分析页",
+            "instruction": "展示实际案例",
+        },
+        {
+            "slide_type": "tools",
+            "name": "工具",
+            "description": "工具展示页",
+            "instruction": "展示相关工具或设备",
+        },
+        {
+            "slide_type": "summary",
+            "name": "总结",
+            "description": "课程总结页",
+            "instruction": "总结本次课程要点",
+        },
+        {
+            "slide_type": "bridge",
+            "name": "过渡",
+            "description": "过渡页",
+            "instruction": "连接不同章节",
+        },
+        {
+            "slide_type": "agenda",
+            "name": "议程",
+            "description": "议程页",
+            "instruction": "展示课程安排",
+        },
+        {
+            "slide_type": "qa",
+            "name": "问答",
+            "description": "问答互动页",
+            "instruction": "课堂互动和提问",
+        },
+        {
+            "slide_type": "exercise",
+            "name": "练习",
+            "description": "练习页",
+            "instruction": "展示练习题目",
+        },
     ]
     return {"slide_types": slide_types}
-
 
 
 class StyleRefineRequest(BaseModel):
     session_id: str
     feedback: str
+
 
 class StyleRefineResponse(BaseModel):
     ok: bool
@@ -181,16 +291,19 @@ class StyleRefineResponse(BaseModel):
     reasoning: Optional[str] = None  # 大模型的选择理由或设计思路
     error: Optional[str] = None
 
+
 @app.post("/api/workflow/style/refine", response_model=StyleRefineResponse)
 async def refine_style(req: StyleRefineRequest):
     try:
-        cfg, samples, warnings, reasoning = await engine.refine_style(req.session_id, req.feedback)
+        cfg, samples, warnings, reasoning = await engine.refine_style(
+            req.session_id, req.feedback
+        )
         return StyleRefineResponse(
             ok=True,
             style_config=cfg,
             style_samples=samples,
             warnings=warnings,
-            reasoning=reasoning
+            reasoning=reasoning,
         )
     except Exception as e:
         logger.emit(req.session_id, "3.2", "refine_api_error", {"error": str(e)})
@@ -200,7 +313,7 @@ async def refine_style(req: StyleRefineRequest):
             style_samples=[],
             warnings=[],
             reasoning=None,
-            error=str(e)
+            error=str(e),
         )
 
 
@@ -216,7 +329,7 @@ async def sync_style(req: StyleSyncRequest):
         state = store.load(req.session_id)
         if not state:
             return {"ok": False, "error": "Session not found"}
-        
+
         state.style_config = req.style_config
         store.save(state)
         logger.emit(req.session_id, "3.2", "style_synced", {"source": "undo"})
@@ -236,9 +349,11 @@ async def sync_style(req: StyleSyncRequest):
 
 from .common.schemas import OutlineSlide, PPTOutline, TeachingRequest
 
+
 class OutlineUpdateRequest(BaseModel):
     session_id: str
     slides: List[OutlineSlide]
+
 
 class OutlineUpdateResponse(BaseModel):
     ok: bool
@@ -250,7 +365,7 @@ class OutlineUpdateResponse(BaseModel):
 async def update_outline(req: OutlineUpdateRequest):
     """
     Save user-edited outline back to session (Phase 1 - Outline Editor).
-    
+
     Allows frontend to save reordered, edited, added, or deleted slides
     before proceeding to content generation.
     """
@@ -258,22 +373,25 @@ async def update_outline(req: OutlineUpdateRequest):
         state = store.load(req.session_id)
         if not state:
             return OutlineUpdateResponse(ok=False, error="Session not found")
-        
+
         if not state.outline:
-            return OutlineUpdateResponse(ok=False, error="No outline found in session. Run Module 3.3 first.")
-        
+            return OutlineUpdateResponse(
+                ok=False, error="No outline found in session. Run Module 3.3 first."
+            )
+
         # Update the slides array in the existing outline
         state.outline.slides = req.slides
         store.save(state)
-        
-        logger.emit(req.session_id, "3.3", "outline_updated", {
-            "slide_count": len(req.slides),
-            "source": "outline_editor"
-        })
-        
+
+        logger.emit(
+            req.session_id,
+            "3.3",
+            "outline_updated",
+            {"slide_count": len(req.slides), "source": "outline_editor"},
+        )
+
         return OutlineUpdateResponse(
-            ok=True, 
-            message=f"Outline updated with {len(req.slides)} slides"
+            ok=True, message=f"Outline updated with {len(req.slides)} slides"
         )
     except Exception as e:
         logger.emit(req.session_id, "3.3", "outline_update_error", {"error": str(e)})
@@ -284,37 +402,38 @@ async def update_outline(req: OutlineUpdateRequest):
 # Phase 6: Async Parallel Outline Generation (Structure + Expand)
 # =============================================================================
 
+
 class OutlineStructureRequest(BaseModel):
     session_id: str
     style_name: Optional[str] = None
+
 
 class OutlineStructureResponse(BaseModel):
     ok: bool
     outline: Optional[PPTOutline]
     error: Optional[str] = None
 
+
 @app.post("/api/workflow/outline/structure", response_model=OutlineStructureResponse)
 async def generate_outline_structure_endpoint(req: OutlineStructureRequest):
     """Step 1: 快速生成大纲结构"""
     try:
         from .modules.outline.core import generate_outline_structure
-        
+
         state = store.load(req.session_id)
         if not state or not state.teaching_request:
-            return OutlineStructureResponse(ok=False, outline=None, error="Session or request not found")
+            return OutlineStructureResponse(
+                ok=False, outline=None, error="Session or request not found"
+            )
 
         outline = await generate_outline_structure(
-            state.teaching_request,
-            req.style_name,
-            llm,
-            logger,
-            req.session_id
+            state.teaching_request, req.style_name, llm, logger, req.session_id
         )
-        
+
         # Save preliminary outline to state
         state.outline = outline
         store.save(state)
-        
+
         return OutlineStructureResponse(ok=True, outline=outline)
     except Exception as e:
         return OutlineStructureResponse(ok=False, outline=None, error=str(e))
@@ -324,44 +443,49 @@ class SlideExpandRequest(BaseModel):
     session_id: str
     slide_index: int  # 0-based index from slides array
 
+
 class SlideExpandResponse(BaseModel):
     ok: bool
     slide: Optional[OutlineSlide]
     error: Optional[str] = None
+
 
 @app.post("/api/workflow/outline/expand", response_model=SlideExpandResponse)
 async def expand_slide_detail_endpoint(req: SlideExpandRequest):
     """Step 2: 并行扩展单页详情"""
     try:
         from .modules.outline.core import expand_slide_details
-        
+
         state = store.load(req.session_id)
         if not state or not state.outline:
-            return SlideExpandResponse(ok=False, slide=None, error="No outline to expand")
-            
+            return SlideExpandResponse(
+                ok=False, slide=None, error="No outline to expand"
+            )
+
         if not state.teaching_request:
-            return SlideExpandResponse(ok=False, slide=None, error="No teaching request found")
-            
+            return SlideExpandResponse(
+                ok=False, slide=None, error="No teaching request found"
+            )
+
         slides = state.outline.slides
         if req.slide_index < 0 or req.slide_index >= len(slides):
-            return SlideExpandResponse(ok=False, slide=None, error="Invalid slide index")
-            
+            return SlideExpandResponse(
+                ok=False, slide=None, error="Invalid slide index"
+            )
+
         target_slide = slides[req.slide_index]
-        
+
         # Build context from session
         deck_context = {
             "subject": state.teaching_request.subject,
             "scene": state.teaching_request.teaching_scene,
             "objectives": state.teaching_request.teaching_objectives.knowledge,
         }
-        
+
         expanded_slide = await expand_slide_details(
-            target_slide,
-            state.teaching_request,
-            deck_context,
-            llm
+            target_slide, state.teaching_request, deck_context, llm
         )
-        
+
         # Update state (with lock mechanism ideally, but simple assignment here)
         # Note: In a real concurrent env, this read-modify-write on 'state' might be race-prone
         # But for this prototype, we rely on session store's simplicity or minimal collision risk
@@ -369,10 +493,10 @@ async def expand_slide_detail_endpoint(req: SlideExpandRequest):
         # Actually Python objects are passed by reference, so modifying 'target_slide' modifies 'state.outline.slides[i]'
         # We just need to save state.
         state.outline.slides[req.slide_index] = expanded_slide
-        store.save(state) 
-        
+        store.save(state)
+
         return SlideExpandResponse(ok=True, slide=expanded_slide)
-        
+
     except Exception as e:
         return SlideExpandResponse(ok=False, slide=None, error=str(e))
 
@@ -380,6 +504,7 @@ async def expand_slide_detail_endpoint(req: SlideExpandRequest):
 # =============================================================================
 # Phase 2: Async Content Generation Endpoints (2-Stage Workflow)
 # =============================================================================
+
 
 class SlideContentGenerateRequest(BaseModel):
     session_id: str
@@ -389,6 +514,7 @@ class SlideContentGenerateRequest(BaseModel):
 
 class SlideContent(BaseModel):
     """Generated content for a single slide."""
+
     script: str  # Speaker script/notes
     bullets: List[str]  # Detailed bullet points
     visual_suggestions: List[str]  # Image/diagram suggestions
@@ -405,7 +531,7 @@ class SlideContentGenerateResponse(BaseModel):
 async def generate_slide_content(req: SlideContentGenerateRequest):
     """
     Generate detailed content for a single slide (Phase 2 - Async Generation).
-    
+
     This endpoint uses 3.3's outline output as input for 3.4's content generation.
     For exercises pages, original questions from outline are preserved.
     """
@@ -415,70 +541,89 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
             return SlideContentGenerateResponse(
                 ok=False, slide_index=req.slide_index, error="Session not found"
             )
-        
+
         if not state.outline:
             return SlideContentGenerateResponse(
                 ok=False, slide_index=req.slide_index, error="No outline found"
             )
-        
+
         if req.slide_index < 0 or req.slide_index >= len(state.outline.slides):
             return SlideContentGenerateResponse(
-                ok=False, slide_index=req.slide_index, error=f"Invalid slide index: {req.slide_index}"
+                ok=False,
+                slide_index=req.slide_index,
+                error=f"Invalid slide index: {req.slide_index}",
             )
-        
+
         slide = state.outline.slides[req.slide_index]
-        
+
         # 🚨 Special handling for exercises/quiz pages
         # Preserve original questions from 3.3 outline, don't call LLM
         if slide.slide_type in ("exercises", "quiz") and slide.bullets:
-            print(f"[DEBUG] 3.4 generate_slide {req.slide_index}: SKIPPING LLM for exercises (preserving {len(slide.bullets)} questions)")
-            
+            print(
+                f"[DEBUG] 3.4 generate_slide {req.slide_index}: SKIPPING LLM for exercises (preserving {len(slide.bullets)} questions)"
+            )
+
             # Return content directly from outline bullets
             content = SlideContent(
                 script=f"请学生独立完成以下练习题，完成后进行讲解。",
                 bullets=slide.bullets,  # Preserve original questions!
-                visual_suggestions=[f"建议配图：{slide.title}相关的评分表或题目展示图"]
+                visual_suggestions=[f"建议配图：{slide.title}相关的评分表或题目展示图"],
             )
             return SlideContentGenerateResponse(
                 ok=True, slide_index=req.slide_index, content=content
             )
-        
+
         # Check if LLM is enabled
         if not llm.is_enabled():
             # Return content based on outline when LLM is disabled
             mock_content = SlideContent(
                 script=f"讲解{slide.title}的核心内容，确保学生理解关键概念。",
-                bullets=slide.bullets if slide.bullets else [f"{slide.title}的要点1", f"{slide.title}的要点2"],
-                visual_suggestions=[f"建议配图：{slide.title}相关示意图"]
+                bullets=slide.bullets
+                if slide.bullets
+                else [f"{slide.title}的要点1", f"{slide.title}的要点2"],
+                visual_suggestions=[f"建议配图：{slide.title}相关示意图"],
             )
             return SlideContentGenerateResponse(
                 ok=True, slide_index=req.slide_index, content=mock_content
             )
-        
+
         # For other page types, use LLM to enhance content
         # But still preserve the outline's bullets as the source of truth
         context_info = f"""
 课程主题：{state.outline.deck_title}
-知识点：{', '.join(state.outline.knowledge_points)}
+知识点：{", ".join(state.outline.knowledge_points)}
 教学场景：{state.outline.teaching_scene}
 """
-        
+
         # 🔴 Key change: Include original bullets in prompt and instruct to preserve them
         original_bullets = slide.bullets if slide.bullets else []
-        
+
         # 🎯 Adaptive Density: Determine image count hint based on slide type
         slide_type_image_hints = {
             # 0 images: 纯文字页面
-            "title": 0, "cover": 0, "objectives": 0, "agenda": 0, 
-            "summary": 0, "qa": 0, "reference": 0,
+            "title": 0,
+            "cover": 0,
+            "objectives": 0,
+            "agenda": 0,
+            "summary": 0,
+            "qa": 0,
+            "reference": 0,
             # 1 image: 标准配图页面
-            "concept": 1, "theory": 1, "steps": 1, "process": 1, 
-            "practice": 1, "case": 1, "warning": 1, "intro": 1,
+            "concept": 1,
+            "theory": 1,
+            "steps": 1,
+            "process": 1,
+            "practice": 1,
+            "case": 1,
+            "warning": 1,
+            "intro": 1,
             # 2 images: 对比/双主体页面
-            "comparison": 2, "tools": 2, "relations": 2,
+            "comparison": 2,
+            "tools": 2,
+            "relations": 2,
         }
         image_hint = slide_type_image_hints.get(slide.slide_type, 1)
-        
+
         prompt = f"""请为以下PPT幻灯片生成内容，遵循"自适应密度"原则：
 
 {context_info}
@@ -532,13 +677,18 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
 - `bullets` 数组长度 2-4，优先保留原始要点
 - `visual_suggestions` 数组长度必须等于 `image_count`（0/1/2）
 """
-        
-        logger.emit(req.session_id, "3.4", "slide_generate_start", {
-            "slide_index": req.slide_index,
-            "slide_type": slide.slide_type,
-            "image_hint": image_hint
-        })
-        
+
+        logger.emit(
+            req.session_id,
+            "3.4",
+            "slide_generate_start",
+            {
+                "slide_index": req.slide_index,
+                "slide_type": slide.slide_type,
+                "image_hint": image_hint,
+            },
+        )
+
         # Call LLM with adaptive density constraints
         system_prompt = """你是一位专业的PPT内容设计师，专注于"少即是多"的设计理念。
 
@@ -548,15 +698,13 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
 3. **精炼表达**: 每条要点 10-20 字，演讲脚本 2-4 句话
 
 以JSON格式返回，数组长度可变。"""
-        
-        json_schema = '''{"script": "string", "bullets": ["string"], "image_count": 0, "visual_suggestions": ["string"]}'''
-        
+
+        json_schema = """{"script": "string", "bullets": ["string"], "image_count": 0, "visual_suggestions": ["string"]}"""
+
         result, _meta = await llm.chat_json(
-            system=system_prompt,
-            user=prompt,
-            json_schema_hint=json_schema
+            system=system_prompt, user=prompt, json_schema_hint=json_schema
         )
-        
+
         if not result:
             # Fallback: use original bullets from outline, respect image_hint
             fallback_visuals = []
@@ -564,56 +712,67 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
                 fallback_visuals.append(f"diagram: {slide.title}相关示意图")
             if image_hint >= 2:
                 fallback_visuals.append(f"photo: {slide.title}对比图")
-            
+
             return SlideContentGenerateResponse(
-                ok=True, 
-                slide_index=req.slide_index, 
+                ok=True,
+                slide_index=req.slide_index,
                 content=SlideContent(
                     script=f"讲解{slide.title}的核心内容。",
-                    bullets=original_bullets if original_bullets else [f"{slide.title}的要点"],
-                    visual_suggestions=fallback_visuals
-                )
+                    bullets=original_bullets
+                    if original_bullets
+                    else [f"{slide.title}的要点"],
+                    visual_suggestions=fallback_visuals,
+                ),
             )
-        
+
         # If LLM didn't return proper bullets, use original from outline
         result_bullets = result.get("bullets", [])
         if not result_bullets or len(result_bullets) == 0:
-            result_bullets = original_bullets if original_bullets else [f"{slide.title}的要点"]
-        
+            result_bullets = (
+                original_bullets if original_bullets else [f"{slide.title}的要点"]
+            )
+
         # 🎯 Enforce bullet limit: max 4 bullets
         if len(result_bullets) > 4:
             result_bullets = result_bullets[:4]
-        
+
         # 🎯 Enforce image limit: respect image_hint, max 2
         result_visuals = result.get("visual_suggestions", [])
         actual_image_count = result.get("image_count", image_hint)
         actual_image_count = min(actual_image_count, 2)  # Never exceed 2
-        
+
         # Trim or pad visual_suggestions to match image_count
         if len(result_visuals) > actual_image_count:
             result_visuals = result_visuals[:actual_image_count]
-        
+
         content = SlideContent(
             script=result.get("script", ""),
             bullets=result_bullets,
-            visual_suggestions=result_visuals
+            visual_suggestions=result_visuals,
         )
-        
-        logger.emit(req.session_id, "3.4", "slide_generate_done", {
-            "slide_index": req.slide_index,
-            "bullet_count": len(content.bullets),
-            "image_count": len(content.visual_suggestions)
-        })
-        
+
+        logger.emit(
+            req.session_id,
+            "3.4",
+            "slide_generate_done",
+            {
+                "slide_index": req.slide_index,
+                "bullet_count": len(content.bullets),
+                "image_count": len(content.visual_suggestions),
+            },
+        )
+
         return SlideContentGenerateResponse(
             ok=True, slide_index=req.slide_index, content=content
         )
-        
+
     except Exception as e:
-        logger.emit(req.session_id, "3.4", "slide_generate_error", {
-            "slide_index": req.slide_index,
-            "error": str(e)
-        })
+        logger.emit(
+            req.session_id,
+            "3.4",
+            "slide_generate_error",
+            {"slide_index": req.slide_index, "error": str(e)},
+        )
         return SlideContentGenerateResponse(
             ok=False, slide_index=req.slide_index, error=str(e)
         )
@@ -626,42 +785,47 @@ async def render_html_slides_api(req: dict):
         session_id = req.get("session_id")
         if not session_id:
             return {"ok": False, "error": "Missing session_id"}
-        
+
         state = store.load(session_id)
         if not state:
             return {"ok": False, "error": "Session not found"}
-        
+
         if not state.deck_content:
             return {"ok": False, "error": "No deck_content found"}
-        
+
         if not state.style_config:
             return {"ok": False, "error": "No style_config found"}
-        
+
         if not state.teaching_request:
             return {"ok": False, "error": "No teaching_request found"}
-        
+
         from .modules.render import render_html_slides
-        
+
         output_dir = Path(DATA_DIR) / "outputs"
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         result = await render_html_slides(
             deck_content=state.deck_content,
             style_config=state.style_config,
             teaching_request=state.teaching_request,
             session_id=session_id,
             output_dir=str(output_dir),
-            llm=llm
+            llm=llm,
         )
-        
+
         state.render_result = result
         store.save(state)
-        
-        logger.emit(session_id, "3.5", "render_complete", {
-            "html_path": result.html_path,
-            "total_pages": result.total_pages,
-        })
-        
+
+        logger.emit(
+            session_id,
+            "3.5",
+            "render_complete",
+            {
+                "html_path": result.html_path,
+                "total_pages": result.total_pages,
+            },
+        )
+
         return {
             "ok": True,
             "html_path": result.html_path,
@@ -681,7 +845,246 @@ async def render_html_slides_api(req: dict):
             "warnings": result.warnings,
         }
     except Exception as e:
-        logger.emit(req.get("session_id", "unknown"), "3.5", "render_error", {"error": str(e)})
+        logger.emit(
+            req.get("session_id", "unknown"), "3.5", "render_error", {"error": str(e)}
+        )
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/workflow/render/with-data")
+async def render_with_full_data(req: dict):
+    """
+    3.5 模块：使用完整的 3.1-3.4 输出数据进行渲染
+
+    支持两种模式：
+    1. 传入完整的 Mock 数据（测试模式）
+    2. 传入 session_id（正常流程模式，从session读取数据）
+
+    请求体格式：
+    {
+        "session_id": "xxx",  // 可选，从session读取数据
+        "teaching_request": {...},  // 可选，3.1输出
+        "style_config": {...},  // 可选，3.2输出
+        "deck_content": {...}   // 可选，3.4输出
+    }
+    如果只传 session_id，则从session读取所有数据
+    如果传了具体数据，则使用传入的数据（覆盖session数据）
+    """
+    from .modules.render import render_html_slides
+    from .common.schemas import (
+        TeachingRequest,
+        StyleConfig,
+        SlideDeckContent,
+        SlidePage,
+        SlideElement,
+    )
+
+    try:
+        session_id = req.get("session_id") or f"mock_{int(time.time())}"
+
+        # 确定使用的数据源
+        if session_id and not req.get("teaching_request"):
+            # 正常流程：从session读取
+            state = store.load(session_id)
+            if not state:
+                return {"ok": False, "error": "Session not found"}
+
+            teaching_request = state.teaching_request
+            style_config = state.style_config
+            deck_content = state.deck_content
+        else:
+            # 测试模式：使用传入的Mock数据
+            from .modules.render.mock_data import get_mock_full_input
+
+            if req.get("use_mock") and req.get("subject"):
+                # 使用预设的Mock数据
+                mock_data = get_mock_full_input(req.get("subject"))
+                teaching_request = TeachingRequest(**mock_data["teaching_request"])
+                style_config = StyleConfig(**mock_data["style_config"])
+                deck_content = SlideDeckContent(**mock_data["deck_content"])
+            else:
+                # 使用传入的完整数据
+                teaching_request_data = req.get(
+                    "teaching_request", get_mock_full_input()["teaching_request"]
+                )
+                style_config_data = req.get(
+                    "style_config", get_mock_full_input()["style_config"]
+                )
+                deck_content_data = req.get(
+                    "deck_content", get_mock_full_input()["deck_content"]
+                )
+
+                teaching_request = TeachingRequest(**teaching_request_data)
+                style_config = StyleConfig(**style_config_data)
+                deck_content = SlideDeckContent(**deck_content_data)
+
+        if not teaching_request:
+            return {"ok": False, "error": "No teaching_request found or provided"}
+        if not style_config:
+            return {"ok": False, "error": "No style_config found or provided"}
+        if not deck_content:
+            return {"ok": False, "error": "No deck_content found or provided"}
+
+        # 创建输出目录
+        output_dir = Path(DATA_DIR) / "outputs" / session_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 渲染HTML
+        result = await render_html_slides(
+            deck_content=deck_content,
+            style_config=style_config,
+            teaching_request=teaching_request,
+            session_id=session_id,
+            output_dir=str(output_dir),
+            llm=llm,
+        )
+
+        # 保存到session（如果存在）
+        if session_id and not session_id.startswith("mock_"):
+            state = store.load(session_id)
+            if state:
+                state.render_result = result
+                store.save(state)
+
+        logger.emit(
+            session_id,
+            "3.5",
+            "render_with_data_complete",
+            {
+                "html_path": result.html_path,
+                "total_pages": result.total_pages,
+                "total_image_slots": len(result.image_slots),
+                "source": "session" if not req.get("use_mock") else "mock_data",
+            },
+        )
+
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "html_path": result.html_path,
+            "total_pages": result.total_pages,
+            "image_slots": [
+                {
+                    "slot_id": slot.slot_id,
+                    "page_index": slot.page_index,
+                    "theme": slot.theme,
+                    "keywords": slot.keywords,
+                    "visual_style": slot.visual_style.value,
+                    "aspect_ratio": slot.aspect_ratio.value,
+                }
+                for slot in result.image_slots
+            ],
+            "layouts_used": result.layouts_used,
+            "warnings": result.warnings,
+        }
+    except Exception as e:
+        logger.emit(
+            req.get("session_id", "unknown"),
+            "3.5",
+            "render_with_data_error",
+            {"error": str(e)},
+        )
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/workflow/render/mock")
+async def render_with_mock_data(req: dict = {}):
+    """
+    使用完整的 Mock 数据（3.1-3.4 输出）测试 3.5 模块渲染
+
+    这是最完整的测试方式，直接使用预设的Mock数据进行渲染
+
+    请求体可选参数：
+    - use_mock: 是否使用Mock数据（默认true）
+    - subject: 学科主题，可选 'mechanical' 或 'chemistry'（默认 'mechanical'）
+    """
+    from .modules.render import render_html_slides
+    from .modules.render.mock_data import (
+        get_mock_full_input,
+        MOCK_TEACHING_REQUEST,
+        MOCK_STYLE_CONFIG,
+        MOCK_SLIDE_DECK_CONTENT,
+        MOCK_TEACHING_REQUEST_CHEMISTRY,
+        MOCK_STYLE_CONFIG_CHEMISTRY,
+        MOCK_DECK_CHEMISTRY,
+    )
+    from .common.schemas import TeachingRequest, StyleConfig, SlideDeckContent
+
+    try:
+        session_id = f"mock_full_{int(time.time())}"
+
+        # 根据subject选择Mock数据
+        subject = req.get("subject", "mechanical")
+
+        if subject == "chemistry":
+            teaching_request = TeachingRequest(**MOCK_TEACHING_REQUEST_CHEMISTRY)
+            style_config = StyleConfig(**MOCK_STYLE_CONFIG_CHEMISTRY)
+            deck_content_data = MOCK_DECK_CHEMISTRY
+        else:
+            teaching_request = TeachingRequest(**MOCK_TEACHING_REQUEST)
+            style_config = StyleConfig(**MOCK_STYLE_CONFIG)
+            deck_content_data = MOCK_SLIDE_DECK_CONTENT
+
+        deck_content = SlideDeckContent(**deck_content_data)
+
+        # 创建输出目录
+        output_dir = Path(DATA_DIR) / "outputs" / session_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 渲染HTML
+        result = await render_html_slides(
+            deck_content=deck_content,
+            style_config=style_config,
+            teaching_request=teaching_request,
+            session_id=session_id,
+            output_dir=str(output_dir),
+            llm=llm,
+        )
+
+        # 创建并保存 session 状态（关键：使图片生成 API 能找到该 session）
+        from .common.schemas import SessionState
+        mock_state = SessionState(session_id=session_id)
+        mock_state.teaching_request = teaching_request
+        mock_state.style_config = style_config
+        mock_state.deck_content = deck_content
+        mock_state.render_result = result
+        store.save(mock_state)
+
+        logger.emit(
+            session_id,
+            "3.5",
+            "mock_render_complete",
+            {
+                "html_path": result.html_path,
+                "total_pages": result.total_pages,
+                "total_image_slots": len(result.image_slots),
+                "subject": subject,
+            },
+        )
+
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "html_path": result.html_path,
+            "total_pages": result.total_pages,
+            "image_slots": [
+                {
+                    "slot_id": slot.slot_id,
+                    "page_index": slot.page_index,
+                    "theme": slot.theme,
+                    "keywords": slot.keywords,
+                    "visual_style": slot.visual_style.value,
+                    "aspect_ratio": slot.aspect_ratio.value,
+                }
+                for slot in result.image_slots
+            ],
+            "layouts_used": result.layouts_used,
+            "warnings": result.warnings,
+        }
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
         return {"ok": False, "error": str(e)}
 
 
@@ -689,7 +1092,7 @@ async def render_html_slides_api(req: dict):
 async def render_html_slides_mock_deprecated():
     """
     使用 mock 3.4 数据测试 3.5 模块渲染
-    
+
     不依赖真实的 3.4 模块,直接使用模拟数据
     """
     try:
@@ -710,7 +1113,7 @@ async def render_html_slides_mock_deprecated():
             SpecialRequirementsDetailed,
         )
         from .modules.render import render_html_slides
-        
+
         # 创建 mock 数据
         mock_deck = SlideDeckContent(
             deck_title="液压系统工作原理",
@@ -734,12 +1137,17 @@ async def render_html_slides_mock_deprecated():
                         SlideElement(
                             id="elem1",
                             type="bullets",
-                            x=0.1, y=0.2, w=0.8, h=0.7,
-                            content={"items": [
-                                "掌握液压系统的基本组成和工作原理",
-                                "能够识别液压系统的主要部件",
-                                "培养安全操作意识和规范操作习惯",
-                            ]},
+                            x=0.1,
+                            y=0.2,
+                            w=0.8,
+                            h=0.7,
+                            content={
+                                "items": [
+                                    "掌握液压系统的基本组成和工作原理",
+                                    "能够识别液压系统的主要部件",
+                                    "培养安全操作意识和规范操作习惯",
+                                ]
+                            },
                             style={"role": "body"},
                         ),
                     ],
@@ -755,19 +1163,27 @@ async def render_html_slides_mock_deprecated():
                         SlideElement(
                             id="elem1",
                             type="bullets",
-                            x=0.05, y=0.2, w=0.5, h=0.7,
-                            content={"items": [
-                                "动力元件：液压泵,提供压力油",
-                                "执行元件：液压缸、液压马达",
-                                "控制元件：各种阀,控制流量和压力",
-                                "辅助元件：油箱、滤油器、管路等",
-                            ]},
+                            x=0.05,
+                            y=0.2,
+                            w=0.5,
+                            h=0.7,
+                            content={
+                                "items": [
+                                    "动力元件：液压泵,提供压力油",
+                                    "执行元件：液压缸、液压马达",
+                                    "控制元件：各种阀,控制流量和压力",
+                                    "辅助元件：油箱、滤油器、管路等",
+                                ]
+                            },
                             style={"role": "body"},
                         ),
                         SlideElement(
                             id="elem2",
                             type="image",
-                            x=0.6, y=0.2, w=0.35, h=0.7,
+                            x=0.6,
+                            y=0.2,
+                            w=0.35,
+                            h=0.7,
                             content={
                                 "placeholder": True,
                                 "kind": "diagram",
@@ -788,7 +1204,10 @@ async def render_html_slides_mock_deprecated():
                         SlideElement(
                             id="elem1",
                             type="image",
-                            x=0.05, y=0.2, w=0.4, h=0.7,
+                            x=0.05,
+                            y=0.2,
+                            w=0.4,
+                            h=0.7,
                             content={
                                 "placeholder": True,
                                 "kind": "photo",
@@ -799,14 +1218,19 @@ async def render_html_slides_mock_deprecated():
                         SlideElement(
                             id="elem2",
                             type="bullets",
-                            x=0.5, y=0.2, w=0.45, h=0.7,
-                            content={"items": [
-                                "检查油箱油位,确保油量充足",
-                                "检查各连接部位,确保无泄漏",
-                                "启动液压泵,观察压力表读数",
-                                "调节溢流阀,设定系统压力",
-                                "试运行,检查系统工作是否正常",
-                            ]},
+                            x=0.5,
+                            y=0.2,
+                            w=0.45,
+                            h=0.7,
+                            content={
+                                "items": [
+                                    "检查油箱油位,确保油量充足",
+                                    "检查各连接部位,确保无泄漏",
+                                    "启动液压泵,观察压力表读数",
+                                    "调节溢流阀,设定系统压力",
+                                    "试运行,检查系统工作是否正常",
+                                ]
+                            },
                             style={"role": "body"},
                         ),
                     ],
@@ -822,7 +1246,10 @@ async def render_html_slides_mock_deprecated():
                         SlideElement(
                             id="elem1",
                             type="image",
-                            x=0.05, y=0.2, w=0.42, h=0.6,
+                            x=0.05,
+                            y=0.2,
+                            w=0.42,
+                            h=0.6,
                             content={
                                 "placeholder": True,
                                 "kind": "photo",
@@ -833,14 +1260,20 @@ async def render_html_slides_mock_deprecated():
                         SlideElement(
                             id="elem2",
                             type="text",
-                            x=0.05, y=0.82, w=0.42, h=0.1,
+                            x=0.05,
+                            y=0.82,
+                            w=0.42,
+                            h=0.1,
                             content={"text": "✓ 正确操作"},
                             style={"role": "body"},
                         ),
                         SlideElement(
                             id="elem3",
                             type="image",
-                            x=0.53, y=0.2, w=0.42, h=0.6,
+                            x=0.53,
+                            y=0.2,
+                            w=0.42,
+                            h=0.6,
                             content={
                                 "placeholder": True,
                                 "kind": "warning",
@@ -851,7 +1284,10 @@ async def render_html_slides_mock_deprecated():
                         SlideElement(
                             id="elem4",
                             type="text",
-                            x=0.53, y=0.82, w=0.42, h=0.1,
+                            x=0.53,
+                            y=0.82,
+                            w=0.42,
+                            h=0.1,
                             content={"text": "✗ 错误操作"},
                             style={"role": "body"},
                         ),
@@ -875,7 +1311,9 @@ async def render_html_slides_mock_deprecated():
                             content={
                                 "placeholder": True,
                                 "kind": "photo",
-                                "theme": ["液压扳手", "液压千斤顶", "液压钳", "压力表"][i-1],
+                                "theme": ["液压扳手", "液压千斤顶", "液压钳", "压力表"][
+                                    i - 1
+                                ],
                             },
                             style={"role": "visual"},
                         )
@@ -893,13 +1331,18 @@ async def render_html_slides_mock_deprecated():
                         SlideElement(
                             id="elem1",
                             type="bullets",
-                            x=0.1, y=0.2, w=0.8, h=0.7,
-                            content={"items": [
-                                "掌握了液压系统的基本组成",
-                                "学会了液压系统的启动步骤",
-                                "了解了正确与错误的操作方式",
-                                "认识了常用的液压工具",
-                            ]},
+                            x=0.1,
+                            y=0.2,
+                            w=0.8,
+                            h=0.7,
+                            content={
+                                "items": [
+                                    "掌握了液压系统的基本组成",
+                                    "学会了液压系统的启动步骤",
+                                    "了解了正确与错误的操作方式",
+                                    "认识了常用的液压工具",
+                                ]
+                            },
                             style={"role": "body"},
                         ),
                     ],
@@ -907,7 +1350,7 @@ async def render_html_slides_mock_deprecated():
                 ),
             ],
         )
-        
+
         mock_style = StyleConfig(
             style_name="professional",
             color=ColorConfig(
@@ -936,7 +1379,7 @@ async def render_html_slides_mock_deprecated():
                 icon_style="flat",
             ),
         )
-        
+
         mock_request = TeachingRequest(
             teaching_scenario=TeachingScenarioDetail(
                 scene_type="practice",
@@ -966,13 +1409,13 @@ async def render_html_slides_mock_deprecated():
                 warnings_enabled=True,
             ),
         )
-        
+
         # 调用渲染
         output_dir = Path(DATA_DIR) / "outputs"
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         session_id = f"mock_{int(time.time())}"
-        
+
         result = await render_html_slides(
             deck_content=mock_deck,
             style_config=mock_style,
@@ -980,12 +1423,17 @@ async def render_html_slides_mock_deprecated():
             session_id=session_id,
             output_dir=str(output_dir),
         )
-        
-        logger.emit(session_id, "3.5", "mock_render_complete", {
-            "html_path": result.html_path,
-            "total_pages": result.total_pages,
-        })
-        
+
+        logger.emit(
+            session_id,
+            "3.5",
+            "mock_render_complete",
+            {
+                "html_path": result.html_path,
+                "total_pages": result.total_pages,
+            },
+        )
+
         return {
             "ok": True,
             "html_path": result.html_path,
@@ -1006,6 +1454,7 @@ async def render_html_slides_mock_deprecated():
         }
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return {"ok": False, "error": str(e)}
 
@@ -1013,57 +1462,56 @@ async def render_html_slides_mock_deprecated():
 # In-memory store for render status (for streaming/polling)
 render_status_store: Dict[str, Dict[str, Any]] = {}
 
+
 def generate_images_task(session_id: str, slots: List, output_dir: Path):
     """后台任务：生成图片并更新状态"""
     try:
         from .modules.render.image_generator import generate_image
-        
+
         api_key = os.getenv("DASHSCOPE_API_KEY")
         if not api_key:
             print("[BG] No API Key, skipping image gen")
             return
-            
+
         render_status_store[session_id] = {"images": {}}
         images_dir = output_dir / "images"
         images_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for slot in slots:
             slot_id = slot.slot_id
-            
+
             # Init status
             render_status_store[session_id]["images"][slot_id] = {
                 "status": "generating",
-                "url": None
+                "url": None,
             }
-            
+
             prompt = f"{slot.theme}, {', '.join(slot.keywords)}, photorealistic, high quality, 4k"
-            if getattr(slot, 'visual_style', None):
-                 prompt += f", {slot.visual_style} style"
-            
+            if getattr(slot, "visual_style", None):
+                prompt += f", {slot.visual_style} style"
+
             # 使用 Hash 缓存的生成器
             filename = f"{session_id}_{slot_id}.png"
             # 注意: image_generator 内部现在使用 hash 做文件名，但我们可以把 session 相关文件名 copy 过去或者直接用 hash 名
             # 为了简单，直接用 image_generator 返回的路径
-            
+
             print(f"[BG] Generating for {slot_id}: {prompt}")
             image_abs_path = generate_image(prompt, str(images_dir), api_key)
-            
+
             if image_abs_path:
                 # 获取相对路径 (相对于 HTML)
                 # image_abs_path 是绝对路径，我们需要 /data/outputs/images/xxx.png 或者 ./images/xxx.png
                 # HTML 也是在 output_dir 下，所以 ./images/文件名
                 rel_name = os.path.basename(image_abs_path)
                 web_url = f"./images/{rel_name}"
-                
+
                 render_status_store[session_id]["images"][slot_id] = {
                     "status": "done",
-                    "url": web_url
+                    "url": web_url,
                 }
                 print(f"[BG] Done {slot_id} -> {web_url}")
             else:
-                render_status_store[session_id]["images"][slot_id] = {
-                    "status": "error"
-                }
+                render_status_store[session_id]["images"][slot_id] = {"status": "error"}
 
     except Exception as e:
         print(f"[BG] Error: {e}")
@@ -1076,7 +1524,7 @@ def get_render_status(session_id: str):
     return {"ok": True, "images": status.get("images", {})}
 
 
-@app.post("/api/workflow/render/mock")
+@app.post("/api/workflow/render/mock_deprecated")
 async def render_html_slides_mock(background_tasks: BackgroundTasks):
     """
     使用真实的 Mock 数据测试 3.5 模块 (流式渲染 + 缓存)
@@ -1084,180 +1532,384 @@ async def render_html_slides_mock(background_tasks: BackgroundTasks):
     try:
         from .modules.render import render_html_slides
         from .common.schemas import (
-            SlideDeckContent, SlidePage, SlideElement, StyleConfig, ColorConfig,
-            FontConfig, LayoutConfig as StyleLayoutConfig, ImageryConfig,
-            TeachingRequest, TeachingScenarioDetail, TeachingObjectivesStructured,
-            SlideRequirementsDetail, SpecialRequirementsDetailed
+            SlideDeckContent,
+            SlidePage,
+            SlideElement,
+            StyleConfig,
+            ColorConfig,
+            FontConfig,
+            LayoutConfig as StyleLayoutConfig,
+            ImageryConfig,
+            TeachingRequest,
+            TeachingScenarioDetail,
+            TeachingObjectivesStructured,
+            SlideRequirementsDetail,
+            SpecialRequirementsDetailed,
         )
-        
+
         # === 1. 构建真实的 10 页 Mock 数据 (液压系统) ===
         pages = []
-        
+
         # Helper to simplify element creation
         def mk_elem(etype, content, idx):
             return SlideElement(id=f"el_{idx}", type=etype, content=content)
 
         # Page 1: 封面
-        pages.append(SlidePage(
-            index=1, slide_type="title", title="液压系统原理与维护",
-            layout={"template": "title_only"}, 
-            elements=[], 
-            speaker_notes=""
-        ))
-        
+        pages.append(
+            SlidePage(
+                index=1,
+                slide_type="title",
+                title="液压系统原理与维护",
+                layout={"template": "title_only"},
+                elements=[],
+                speaker_notes="",
+            )
+        )
+
         # Page 2: 教学目标
-        pages.append(SlidePage(
-            index=2, slide_type="objectives", title="本次课程目标",
-            layout={"template": "title_bullets"},
-            elements=[mk_elem("bullets", {"items": [
-                "理解液压传动的基本工作原理 (帕斯卡定律)",
-                "掌握液压系统的核心组成部分及其功能",
-                "学会液压泵、液压缸的结构与运作方式",
-                "能够进行简单的液压系统故障排查与维护"
-            ]}, 1)], 
-            speaker_notes=""
-        ))
-        
+        pages.append(
+            SlidePage(
+                index=2,
+                slide_type="objectives",
+                title="本次课程目标",
+                layout={"template": "title_bullets"},
+                elements=[
+                    mk_elem(
+                        "bullets",
+                        {
+                            "items": [
+                                "理解液压传动的基本工作原理 (帕斯卡定律)",
+                                "掌握液压系统的核心组成部分及其功能",
+                                "学会液压泵、液压缸的结构与运作方式",
+                                "能够进行简单的液压系统故障排查与维护",
+                            ]
+                        },
+                        1,
+                    )
+                ],
+                speaker_notes="",
+            )
+        )
+
         # Page 3: 液压系统组成 (概念)
-        pages.append(SlidePage(
-            index=3, slide_type="concept", title="液压系统的五大组成部分",
-            layout={"template": "title_bullets_right_img"},
-            elements=[
-                mk_elem("bullets", {"items": [
-                    "动力元件: 液压泵 (机械能 -> 液压能)",
-                    "执行元件: 液压缸/马达 (液压能 -> 机械能)",
-                    "控制元件: 各种阀门 (控制压力、流量、方向)",
-                    "辅助元件: 油箱、滤油器、管路",
-                    "工作介质: 液压油"
-                ]}, 1),
-                mk_elem("image", {"kind": "diagram", "theme": "液压系统五大组成全景图，包含油泵、油缸、阀门、油箱、管路，工程示意图", "placeholder": True}, 2)
-            ], speaker_notes=""
-        ))
-        
+        pages.append(
+            SlidePage(
+                index=3,
+                slide_type="concept",
+                title="液压系统的五大组成部分",
+                layout={"template": "title_bullets_right_img"},
+                elements=[
+                    mk_elem(
+                        "bullets",
+                        {
+                            "items": [
+                                "动力元件: 液压泵 (机械能 -> 液压能)",
+                                "执行元件: 液压缸/马达 (液压能 -> 机械能)",
+                                "控制元件: 各种阀门 (控制压力、流量、方向)",
+                                "辅助元件: 油箱、滤油器、管路",
+                                "工作介质: 液压油",
+                            ]
+                        },
+                        1,
+                    ),
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "diagram",
+                            "theme": "液压系统五大组成全景图，包含油泵、油缸、阀门、油箱、管路，工程示意图",
+                            "placeholder": True,
+                        },
+                        2,
+                    ),
+                ],
+                speaker_notes="",
+            )
+        )
+
         # Page 4: 动力元件 - 液压泵 (细节)
-        pages.append(SlidePage(
-            index=4, slide_type="content", title="核心动力：液压泵",
-            layout={"template": "title_bullets_right_img"},
-            elements=[
-                mk_elem("bullets", {"items": [
-                    "作用：为系统提供压力油，是心脏部件",
-                    "常用类型：齿轮泵、叶片泵、柱塞泵",
-                    "特点：齿轮泵结构简单但噪音大，柱塞泵压力高效率高",
-                    "维护重点：防止吸空，定期更换密封件"
-                ]}, 1),
-                mk_elem("image", {"kind": "photo", "theme": "工业齿轮泵内部精密结构特写，金属齿轮咬合，机械剖视图，高精度渲染", "placeholder": True}, 2)
-            ], speaker_notes=""
-        ))
-        
+        pages.append(
+            SlidePage(
+                index=4,
+                slide_type="content",
+                title="核心动力：液压泵",
+                layout={"template": "title_bullets_right_img"},
+                elements=[
+                    mk_elem(
+                        "bullets",
+                        {
+                            "items": [
+                                "作用：为系统提供压力油，是心脏部件",
+                                "常用类型：齿轮泵、叶片泵、柱塞泵",
+                                "特点：齿轮泵结构简单但噪音大，柱塞泵压力高效率高",
+                                "维护重点：防止吸空，定期更换密封件",
+                            ]
+                        },
+                        1,
+                    ),
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "photo",
+                            "theme": "工业齿轮泵内部精密结构特写，金属齿轮咬合，机械剖视图，高精度渲染",
+                            "placeholder": True,
+                        },
+                        2,
+                    ),
+                ],
+                speaker_notes="",
+            )
+        )
+
         # Page 5: 执行元件 - 液压缸
-        pages.append(SlidePage(
-            index=5, slide_type="content", title="执行机构：液压缸",
-            layout={"template": "title_bullets_right_img"},
-            elements=[
-                mk_elem("bullets", {"items": [
-                    "作用：将液压能转换为直线运动的机械能",
-                    "分类：单作用式 (靠外力回程)、双作用式 (靠油压回程)",
-                    "关键参数：缸径 (决定推力)、行程 (决定距离)",
-                    "应用：挖掘机动臂、注塑机合模机构"
-                ]}, 1),
-                mk_elem("image", {"kind": "photo", "theme": "挖掘机液压缸工作特写", "placeholder": True}, 2)
-            ], speaker_notes=""
-        ))
-        
+        pages.append(
+            SlidePage(
+                index=5,
+                slide_type="content",
+                title="执行机构：液压缸",
+                layout={"template": "title_bullets_right_img"},
+                elements=[
+                    mk_elem(
+                        "bullets",
+                        {
+                            "items": [
+                                "作用：将液压能转换为直线运动的机械能",
+                                "分类：单作用式 (靠外力回程)、双作用式 (靠油压回程)",
+                                "关键参数：缸径 (决定推力)、行程 (决定距离)",
+                                "应用：挖掘机动臂、注塑机合模机构",
+                            ]
+                        },
+                        1,
+                    ),
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "photo",
+                            "theme": "挖掘机液压缸工作特写",
+                            "placeholder": True,
+                        },
+                        2,
+                    ),
+                ],
+                speaker_notes="",
+            )
+        )
+
         # Page 6: 工作原理 (帕斯卡定律)
-        pages.append(SlidePage(
-            index=6, slide_type="concept", title="基本原理：帕斯卡定律",
-            layout={"template": "title_bullets_right_img"},
-            elements=[
-                mk_elem("bullets", {"items": [
-                    "定义：密闭液体上的压强向各个方向传递不变",
-                    "公式：F = P × A (力 = 压强 × 面积)",
-                    "应用：千斤顶原理 (小力举起大重物)",
-                    "优势：可以实现力的放大和远距离传递"
-                ]}, 1),
-                mk_elem("image", {"kind": "diagram", "theme": "帕斯卡定律千斤顶原理示意图", "placeholder": True}, 2)
-            ], speaker_notes=""
-        ))
+        pages.append(
+            SlidePage(
+                index=6,
+                slide_type="concept",
+                title="基本原理：帕斯卡定律",
+                layout={"template": "title_bullets_right_img"},
+                elements=[
+                    mk_elem(
+                        "bullets",
+                        {
+                            "items": [
+                                "定义：密闭液体上的压强向各个方向传递不变",
+                                "公式：F = P × A (力 = 压强 × 面积)",
+                                "应用：千斤顶原理 (小力举起大重物)",
+                                "优势：可以实现力的放大和远距离传递",
+                            ]
+                        },
+                        1,
+                    ),
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "diagram",
+                            "theme": "帕斯卡定律千斤顶原理示意图",
+                            "placeholder": True,
+                        },
+                        2,
+                    ),
+                ],
+                speaker_notes="",
+            )
+        )
 
         # Page 7: 操作步骤 (启动)
-        pages.append(SlidePage(
-            index=7, slide_type="steps", title="液压系统标准启动流程",
-            layout={"template": "operation_steps"},
-            elements=[
-                mk_elem("image", {"kind": "photo", "theme": "液压站控制面板操作", "placeholder": True}, 1),
-                mk_elem("bullets", {"items": [
-                    "检查油箱液位是否在标准刻度线以上",
-                    "确认所有换向阀处于中位，卸荷启动",
-                    "点动电机，检查旋转方向是否正确",
-                    "空载运行 5-10 分钟，进行排气",
-                    "逐步加载，观察压力表读数是否稳定"
-                ]}, 2)
-            ], speaker_notes=""
-        ))
+        pages.append(
+            SlidePage(
+                index=7,
+                slide_type="steps",
+                title="液压系统标准启动流程",
+                layout={"template": "operation_steps"},
+                elements=[
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "photo",
+                            "theme": "液压站控制面板操作",
+                            "placeholder": True,
+                        },
+                        1,
+                    ),
+                    mk_elem(
+                        "bullets",
+                        {
+                            "items": [
+                                "检查油箱液位是否在标准刻度线以上",
+                                "确认所有换向阀处于中位，卸荷启动",
+                                "点动电机，检查旋转方向是否正确",
+                                "空载运行 5-10 分钟，进行排气",
+                                "逐步加载，观察压力表读数是否稳定",
+                            ]
+                        },
+                        2,
+                    ),
+                ],
+                speaker_notes="",
+            )
+        )
 
         # Page 8: 常见故障对比
-        pages.append(SlidePage(
-            index=8, slide_type="comparison", title="正常油液 vs 污染油液",
-            layout={"template": "concept_comparison"},
-            elements=[
-                mk_elem("image", {"kind": "photo", "theme": "清澈透明的液压油样品", "placeholder": True}, 1),
-                mk_elem("text", {"text": "正常油液：淡黄色、透明、无异味"}, 2),
-                mk_elem("image", {"kind": "photo", "theme": "乳化发白的浑浊液压油", "placeholder": True}, 3),
-                mk_elem("text", {"text": "乳化油液：呈乳白色，混入水分，需更换"}, 4)
-            ], speaker_notes=""
-        ))
-        
+        pages.append(
+            SlidePage(
+                index=8,
+                slide_type="comparison",
+                title="正常油液 vs 污染油液",
+                layout={"template": "concept_comparison"},
+                elements=[
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "photo",
+                            "theme": "清澈透明的液压油样品",
+                            "placeholder": True,
+                        },
+                        1,
+                    ),
+                    mk_elem("text", {"text": "正常油液：淡黄色、透明、无异味"}, 2),
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "photo",
+                            "theme": "乳化发白的浑浊液压油",
+                            "placeholder": True,
+                        },
+                        3,
+                    ),
+                    mk_elem(
+                        "text", {"text": "乳化油液：呈乳白色，混入水分，需更换"}, 4
+                    ),
+                ],
+                speaker_notes="",
+            )
+        )
+
         # Page 9: 常用维护工具
-        pages.append(SlidePage(
-            index=9, slide_type="tools", title="维修保养常用工具",
-            layout={"template": "grid_4"},
-            elements=[
-                mk_elem("image", {"kind": "photo", "theme": "液压专用压力表，黑色表盘，指针指向高压区"}, 1),
-                mk_elem("image", {"kind": "photo", "theme": "工业滤芯拆卸专用扳手，金属工具"}, 2),
-                mk_elem("image", {"kind": "photo", "theme": "便携式油液颗粒计数器，手持检测仪器，屏幕显示数据"}, 3),
-                mk_elem("image", {"kind": "photo", "theme": "工业红外测温仪，手持式，激光瞄准点"}, 4)
-            ], speaker_notes=""
-        ))
-        
+        pages.append(
+            SlidePage(
+                index=9,
+                slide_type="tools",
+                title="维修保养常用工具",
+                layout={"template": "grid_4"},
+                elements=[
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "photo",
+                            "theme": "液压专用压力表，黑色表盘，指针指向高压区",
+                        },
+                        1,
+                    ),
+                    mk_elem(
+                        "image",
+                        {"kind": "photo", "theme": "工业滤芯拆卸专用扳手，金属工具"},
+                        2,
+                    ),
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "photo",
+                            "theme": "便携式油液颗粒计数器，手持检测仪器，屏幕显示数据",
+                        },
+                        3,
+                    ),
+                    mk_elem(
+                        "image",
+                        {
+                            "kind": "photo",
+                            "theme": "工业红外测温仪，手持式，激光瞄准点",
+                        },
+                        4,
+                    ),
+                ],
+                speaker_notes="",
+            )
+        )
+
         # Page 10: 总结
-        pages.append(SlidePage(
-            index=10, slide_type="summary", title="课程总结",
-            layout={"template": "title_bullets"},
-            elements=[mk_elem("bullets", {"items": [
-                "液压系统通过液压油传递动力，遵循帕斯卡定律",
-                "五大组成部分各司其职，缺一不可",
-                "正确的启动和维护流程能延长系统寿命",
-                "油液清洁度是液压系统的生命线"
-            ]}, 1)], speaker_notes=""
-        ))
+        pages.append(
+            SlidePage(
+                index=10,
+                slide_type="summary",
+                title="课程总结",
+                layout={"template": "title_bullets"},
+                elements=[
+                    mk_elem(
+                        "bullets",
+                        {
+                            "items": [
+                                "液压系统通过液压油传递动力，遵循帕斯卡定律",
+                                "五大组成部分各司其职，缺一不可",
+                                "正确的启动和维护流程能延长系统寿命",
+                                "油液清洁度是液压系统的生命线",
+                            ]
+                        },
+                        1,
+                    )
+                ],
+                speaker_notes="",
+            )
+        )
 
         deck = SlideDeckContent(deck_title="液压系统原理与维护", pages=pages)
 
         # Style Config
         style_config = StyleConfig(
             style_name="professional",
-            color=ColorConfig(primary="#2c3e50", secondary="#ecf0f1", accent="#3498db", text="#2c3e50", muted="#95a5a6", background="#ffffff", warning="#e74c3c"),
-            font=FontConfig(title_family="Microsoft YaHei", body_family="Microsoft YaHei", title_size=40, body_size=24),
-            layout=StyleLayoutConfig(density="comfortable", notes_area=True), # Corrected schema
-            imagery=ImageryConfig(image_style="photorealistic", icon_style="flat")
+            color=ColorConfig(
+                primary="#2c3e50",
+                secondary="#ecf0f1",
+                accent="#3498db",
+                text="#2c3e50",
+                muted="#95a5a6",
+                background="#ffffff",
+                warning="#e74c3c",
+            ),
+            font=FontConfig(
+                title_family="Microsoft YaHei",
+                body_family="Microsoft YaHei",
+                title_size=40,
+                body_size=24,
+            ),
+            layout=StyleLayoutConfig(
+                density="comfortable", notes_area=True
+            ),  # Corrected schema
+            imagery=ImageryConfig(image_style="photorealistic", icon_style="flat"),
         )
 
         # Teaching Request
         teaching_req = TeachingRequest(
-            teaching_scenario=TeachingScenarioDetail(scene_type="practice", scene_label="实操"),
-            subject_info={"subject_category": "engineering"}, # Mock nested input
-            knowledge_points=[], 
-            teaching_objectives=TeachingObjectivesStructured(knowledge=[], ability=[], literacy=[]),
+            teaching_scenario=TeachingScenarioDetail(
+                scene_type="practice", scene_label="实操"
+            ),
+            subject_info={"subject_category": "engineering"},  # Mock nested input
+            knowledge_points=[],
+            teaching_objectives=TeachingObjectivesStructured(
+                knowledge=[], ability=[], literacy=[]
+            ),
             slide_requirements=SlideRequirementsDetail(target_count=10),
-            special_requirements=SpecialRequirementsDetailed()
+            special_requirements=SpecialRequirementsDetailed(),
         )
         # Manually ensure category is set if needed (but subject_info above handles it)
-        
-        
+
         # 调用渲染 (HTML立即生成)
         output_dir = Path(DATA_DIR) / "outputs"
         session_id = f"mock_{int(time.time())}"
-        
+
         result = await render_html_slides(
             deck_content=deck,
             style_config=style_config,
@@ -1265,26 +1917,33 @@ async def render_html_slides_mock(background_tasks: BackgroundTasks):
             session_id=session_id,
             output_dir=str(output_dir),
         )
-        
+
         # 触发后台生图
         if result.image_slots:
-            background_tasks.add_task(generate_images_task, session_id, result.image_slots, output_dir)
-        
-        logger.emit(session_id, "3.5", "mock_render_start", {"html": result.html_path, "slots": len(result.image_slots)})
-        
+            background_tasks.add_task(
+                generate_images_task, session_id, result.image_slots, output_dir
+            )
+
+        logger.emit(
+            session_id,
+            "3.5",
+            "mock_render_start",
+            {"html": result.html_path, "slots": len(result.image_slots)},
+        )
+
         return {
             "ok": True,
             "html_path": result.html_path,
-            "sesson_id": session_id, # for polling
+            "sesson_id": session_id,  # for polling
             "total_pages": result.total_pages,
             # "image_slots": ... omit detailed slots for brevity
         }
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return {"ok": False, "error": str(e)}
-
 
 
 # Mount static assets (Reveal.js, etc.)
@@ -1304,7 +1963,447 @@ if os.path.exists(DATA_DIR):
     app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
 
 # Serve frontend (pure static) for easy demo
-if os.path.isdir(FRONTEND_DIR):
-    dist = Path(FRONTEND_DIST_DIR)
-    directory = str(dist) if dist.exists() else FRONTEND_DIR
-    app.mount("/", StaticFiles(directory=directory, html=True), name="frontend")
+# COMMENTED OUT to fix 405 error on API routes
+# The catch-all mount was intercepting API requests before they reached the API routes
+# if os.path.isdir(FRONTEND_DIR):
+#     dist = Path(FRONTEND_DIST_DIR)
+#     directory = str(dist) if dist.exists() else FRONTEND_DIR
+#     app.mount("/", StaticFiles(directory=directory, html=True), name="frontend")
+
+
+# =============================================================================
+# 3.5 模块图片生成 API 端点
+# =============================================================================
+
+
+class ImageGenerateResponse(BaseModel):
+    ok: bool
+    total_slots: int
+    message: str
+    error: Optional[str] = None
+
+
+# Use APIRouter to define the route
+from fastapi import APIRouter
+
+
+async def trigger_image_generation(session_id: str, background_tasks: BackgroundTasks):
+    """Trigger image generation for a session (runs in background)"""
+    import os
+    
+    try:
+        from .modules.render.image_filler import ImageFiller
+        
+        # 1. 加载 session 状态
+        state = store.load(session_id)
+        if not state:
+            return {"ok": False, "error": "Session not found"}
+        
+        if not state.render_result:
+            return {"ok": False, "error": "No render_result found. Please run render first."}
+        
+        # 兼容性处理：如果 render_result 是 dict（因为 SessionState 中定义为 Any），则转换为对象
+        if isinstance(state.render_result, dict):
+            from .modules.render.schemas import RenderResult
+            state.render_result = RenderResult.model_validate(state.render_result)
+        
+        if not state.render_result.image_slots:
+            return {"ok": False, "error": "No image slots to generate"}
+        
+        if not state.teaching_request:
+            return {"ok": False, "error": "No teaching_request found"}
+        
+        if not state.style_config:
+            return {"ok": False, "error": "No style_config found"}
+        
+        # 2. 验证 API Key
+        api_key = os.getenv("DASHSCOPE_API_KEY")
+        if not api_key:
+            return {"ok": False, "error": "DASHSCOPE_API_KEY not configured. Please set the environment variable."}
+        
+        # 3. 创建 ImageFiller 实例
+        cache_dir = Path(DATA_DIR) / "outputs" / "images"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        filler = ImageFiller(api_key=api_key, cache_dir=str(cache_dir))
+        
+        total_slots = len(state.render_result.image_slots)
+        
+        # 3.1 立即更新状态为 pending/generating，以便前端 UI 立即响应
+        from .modules.render.schemas import ImageSlotResult
+        import time
+        
+        initial_results = []
+        for slot in state.render_result.image_slots:
+            initial_results.append(ImageSlotResult(
+                slot_id=slot.slot_id,
+                page_index=slot.page_index,
+                status="generating",  # 标记为正在生成
+                image_path=None,
+                error=None,
+            ))
+        state.render_result.image_results = initial_results
+        store.save(state)
+        
+        # 4. 定义后台任务
+        def generate_images_task():
+            """后台执行图片生成"""
+            try:
+                results = filler.generate_for_slots_sync(
+                    slots=state.render_result.image_slots,
+                    teaching_request=state.teaching_request,
+                    style_config=state.style_config,
+                )
+                # 更新 session 状态
+                state.render_result.image_results = results
+                store.save(state)
+                
+                logger.emit(
+                    session_id,
+                    "3.5",
+                    "image_generation_complete",
+                    {
+                        "total": total_slots,
+                        "done": sum(1 for r in results if r.status == "done"),
+                        "failed": sum(1 for r in results if r.status == "failed"),
+                    },
+                )
+            except Exception as e:
+                logger.emit(
+                    session_id,
+                    "3.5",
+                    "image_generation_error",
+                    {"error": str(e)},
+                )
+        
+        # 5. 添加后台任务
+        background_tasks.add_task(generate_images_task)
+        
+        logger.emit(
+            session_id,
+            "3.5",
+            "image_generation_started",
+            {"total_slots": total_slots},
+        )
+        
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "total_slots": total_slots,
+            "message": f"Image generation started for {total_slots} slots",
+        }
+        
+    except Exception as e:
+        logger.emit(session_id, "3.5", "image_generation_error", {"error": str(e)})
+        return {"ok": False, "error": str(e)}
+
+
+render_router = APIRouter()
+
+
+@render_router.post("/generate/{session_id}")
+async def render_generate(session_id: str, background_tasks: BackgroundTasks):
+    """Generate images for a session"""
+    return await trigger_image_generation(session_id, background_tasks)
+
+
+# Mount the router at the correct path
+app.include_router(render_router, prefix="/api/workflow/render")
+
+
+# Debug route to test parameter handling
+@app.post("/api/debug/generate")
+async def debug_generate(session_id: str = None):
+    print(f"DEBUG: debug_generate called with session_id: {session_id}")
+    return {"ok": True, "session_id": session_id, "message": "Debug endpoint works"}
+
+
+@app.get("/api/workflow/render/status/{session_id}")
+def get_image_status(session_id: str):
+    """
+    获取图片生成状态（供前端轮询）
+    """
+    try:
+        state = store.load(session_id)
+        if not state:
+            return {"ok": False, "error": "Session not found"}
+
+        if not state.render_result:
+            return {"ok": False, "error": "No render_result found"}
+
+        # 构建状态信息
+        results = (
+            state.render_result.image_results
+            if state.render_result.image_results
+            else []
+        )
+
+        images = {}
+        done = 0
+        generating = 0
+        failed = 0
+        total = len(state.render_result.image_slots)
+
+        # 初始化未生成的状态
+        for slot in state.render_result.image_slots:
+            images[slot.slot_id] = {
+                "status": "pending",
+                "image_path": None,
+                "error": None,
+            }
+
+        # 更新已生成的状态
+        for result in results:
+            images[result.slot_id] = {
+                "status": result.status,
+                "image_path": result.image_path,
+                "error": result.error,
+            }
+            if result.status == "done":
+                done += 1
+            elif result.status == "generating":
+                generating += 1
+            elif result.status == "failed":
+                failed += 1
+
+        return {
+            "ok": True,
+            "total": total,
+            "done": done,
+            "generating": generating,
+            "failed": failed,
+            "images": images,
+        }
+
+    except Exception as e:
+        logger.emit(session_id, "3.5", "status_error", {"error": str(e)})
+        return {"ok": False, "error": str(e)}
+
+
+@app.get("/api/workflow/render/image/{session_id}/{slot_id}")
+def get_generated_image(session_id: str, slot_id: str):
+    """
+    获取指定插槽生成的图片
+    """
+    try:
+        state = store.load(session_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if not state.render_result:
+            raise HTTPException(status_code=404, detail="No render_result found")
+
+        # 查找对应的结果
+        for result in state.render_result.image_results:
+            if (
+                result.slot_id == slot_id
+                and result.status == "done"
+                and result.image_path
+            ):
+                # 返回文件
+                from fastapi.responses import FileResponse
+
+                return FileResponse(result.image_path)
+
+        # 如果没找到，尝试从 image_slots 直接生成（实时生成）
+        for slot in state.render_result.image_slots:
+            if slot.slot_id == slot_id:
+                if not state.image_filler:
+                    api_key = os.getenv("DASHSCOPE_API_KEY")
+                    if api_key:
+                        from .modules.render.image_filler import ImageFiller
+
+                        state.image_filler = ImageFiller(
+                            api_key=api_key,
+                            cache_dir=f"{DATA_DIR}/{session_id}/images_cache",
+                        )
+
+                if state.image_filler and state.teaching_request and state.style_config:
+                    # 同步生成
+                    prompt = state.image_filler.build_prompt(
+                        slot, state.teaching_request, state.style_config
+                    )
+                    image_path = state.image_filler.generate_image(prompt, slot_id)
+
+                    if image_path:
+                        from fastapi.responses import FileResponse
+
+                        return FileResponse(image_path)
+
+                break
+
+        raise HTTPException(status_code=404, detail="Image not found or not generated")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.emit(
+            session_id, "3.5", "image_error", {"slot_id": slot_id, "error": str(e)}
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/workflow/render/retry/{session_id}/{slot_id}")
+async def retry_slot_generation(
+    session_id: str, slot_id: str, background_tasks: BackgroundTasks
+):
+    """重试单个插槽的图片生成"""
+    try:
+        state = store.load(session_id)
+        if not state:
+            return {"ok": False, "error": "Session not found"}
+
+        if not state.render_result:
+            return {"ok": False, "error": "No render_result found"}
+
+        # 查找对应的 slot
+        target_slot = None
+        for slot in state.render_result.image_slots:
+            if slot.slot_id == slot_id:
+                target_slot = slot
+                break
+
+        if not target_slot:
+            return {"ok": False, "error": "Slot not found"}
+
+        # 使用 image_filler 或创建新的
+        if state.image_filler:
+            image_filler = state.image_filler
+        else:
+            api_key = os.getenv("DASHSCOPE_API_KEY")
+            if not api_key:
+                return {"ok": False, "error": "DASHSCOPE_API_KEY not configured"}
+
+            from .modules.render.image_filler import ImageFiller
+
+            image_filler = ImageFiller(
+                api_key=api_key, cache_dir=f"{DATA_DIR}/{session_id}/images_cache"
+            )
+            state.image_filler = image_filler
+
+        # 移除旧结果（如果有）
+        state.render_result.image_results = [
+            r for r in state.render_result.image_results if r.slot_id != slot_id
+        ]
+        store.save(state)
+
+        # 添加后台任务
+        background_tasks.add_task(
+            run_single_image_task,
+            session_id=session_id,
+            slot=target_slot,
+            teaching_request=state.teaching_request,
+            style_config=state.style_config,
+            image_filler=image_filler,
+            store=store,
+        )
+
+        return {"ok": True, "message": "Retry started"}
+
+    except Exception as e:
+        logger.emit(
+            session_id, "3.5", "retry_error", {"slot_id": slot_id, "error": str(e)}
+        )
+        return {"ok": False, "error": str(e)}
+
+
+async def run_image_generation_task(
+    session_id: str,
+    slots: List,
+    teaching_request: Any,
+    style_config: Any,
+    image_filler: Any,
+    store: SessionStore,
+):
+    """后台任务：生成所有图片"""
+    try:
+        # 调用 image_filler 生成图片
+        results = image_filler.generate_for_slots_sync(
+            slots=slots,
+            teaching_request=teaching_request,
+            style_config=style_config,
+        )
+
+        # 更新状态
+        state = store.load(session_id)
+        if state and state.render_result:
+            state.render_result.image_results = results
+            store.save(state)
+
+        logger.emit(
+            session_id,
+            "3.5",
+            "generation_complete",
+            {
+                "total": len(results),
+                "done": sum(1 for r in results if r.status == "done"),
+                "failed": sum(1 for r in results if r.status == "failed"),
+            },
+        )
+
+    except Exception as e:
+        logger.exception(session_id, "3.5", "generation_task_error", {"error": str(e)})
+
+
+async def run_single_image_task(
+    session_id: str,
+    slot: Any,
+    teaching_request: Any,
+    style_config: Any,
+    image_filler: Any,
+    store: SessionStore,
+):
+    """后台任务：生成单个图片"""
+    try:
+        # 生成 prompt
+        prompt = image_filler.build_prompt(slot, teaching_request, style_config)
+
+        # 调用 API
+        image_path = image_filler.generate_image(prompt, slot.slot_id)
+
+        # 创建结果
+        from .modules.render.image_filler import ImageSlotResult
+        import time
+        from datetime import datetime
+
+        result = ImageSlotResult(
+            slot_id=slot.slot_id,
+            page_index=slot.page_index,
+            status="done" if image_path else "failed",
+            prompt=prompt,
+            image_path=image_path,
+            error=None if image_path else "Generation failed",
+            generated_at=datetime.utcnow(),
+            model_used="qwen-image-max",
+            generation_time_seconds=0,
+        )
+
+        # 更新状态
+        state = store.load(session_id)
+        if state and state.render_result:
+            # 移除旧结果
+            state.render_result.image_results = [
+                r
+                for r in state.render_result.image_results
+                if r.slot_id != slot.slot_id
+            ]
+            # 添加新结果
+            state.render_result.image_results.append(result)
+            store.save(state)
+
+        logger.emit(
+            session_id,
+            "3.5",
+            "slot_retry_complete",
+            {
+                "slot_id": slot.slot_id,
+                "status": result.status,
+            },
+        )
+
+    except Exception as e:
+        logger.exception(
+            session_id,
+            "3.5",
+            "slot_retry_error",
+            {"slot_id": slot.slot_id, "error": str(e)},
+        )

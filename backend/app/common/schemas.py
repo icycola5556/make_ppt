@@ -8,27 +8,44 @@ TeachingScene = Literal["theory", "practice", "review", "unknown"]
 
 # 7 professional categories based on research
 ProfessionalCategory = Literal[
-    "engineering", "medical", "agriculture", "arts", "business", "science", "civil",
-    "transportation", "tourism", "food", "textile", "resources", "water", "media",
-    "public-security", "public-service", "sports", "unknown"
+    "engineering",
+    "medical",
+    "agriculture",
+    "arts",
+    "business",
+    "science",
+    "civil",
+    "transportation",
+    "tourism",
+    "food",
+    "textile",
+    "resources",
+    "water",
+    "media",
+    "public-security",
+    "public-service",
+    "sports",
+    "unknown",
 ]
 
 # Confirmation types for multi-turn interaction
 ConfirmationType = Literal[
     "knowledge_points",  # 确认是否需要补充知识点
-    "slide_count",       # 确认页数调整
-    "teaching_scene",    # 确认教学场景
-    "exercises_count",   # 确认习题数量
-    "none"
+    "slide_count",  # 确认页数调整
+    "teaching_scene",  # 确认教学场景
+    "exercises_count",  # 确认习题数量
+    "none",
 ]
 
 
 # --- Sub-models for structured TeachingRequest ---
 
+
 class SubjectInfo(BaseModel):
     subject_name: Optional[str] = None
     subject_category: ProfessionalCategory = "unknown"
     sub_field: Optional[str] = None
+
 
 class KnowledgePointDetail(BaseModel):
     id: str
@@ -38,22 +55,28 @@ class KnowledgePointDetail(BaseModel):
     difficulty_level: Literal["easy", "medium", "hard"] = "medium"
     estimated_teaching_time_min: Optional[int] = None
 
+
 class KnowledgeStructure(BaseModel):
     total_count: int = 0
-    relation_type: Literal["single", "parallel", "progressive", "causal", "unknown"] = "unknown"
+    relation_type: Literal["single", "parallel", "progressive", "causal", "unknown"] = (
+        "unknown"
+    )
     relation_description: Optional[str] = None
     relation_graph: Optional[Any] = None
+
 
 class TeachingScenarioDetail(BaseModel):
     scene_type: TeachingScene = "unknown"
     scene_label: str = "未指定"
     sub_type: Optional[str] = None
 
+
 class TeachingObjectivesStructured(BaseModel):
     knowledge: List[str] = Field(default_factory=list)
     ability: List[str] = Field(default_factory=list)
     literacy: List[str] = Field(default_factory=list)
     auto_generated: bool = True
+
 
 class SlideRequirementsDetail(BaseModel):
     target_count: Optional[int] = None
@@ -62,7 +85,10 @@ class SlideRequirementsDetail(BaseModel):
     flexibility: Literal["fixed", "adjustable"] = "adjustable"
     lesson_duration_min: int = 45
     llm_recommended_count: Optional[int] = None  # LLM推荐的页数
-    page_conflict_resolution: Optional[str] = None  # 用户选择的解决方式: "accept_recommended", "custom", "keep_original"
+    page_conflict_resolution: Optional[str] = (
+        None  # 用户选择的解决方式: "accept_recommended", "custom", "keep_original"
+    )
+
 
 class CaseRequirement(BaseModel):
     enabled: bool = True
@@ -70,22 +96,27 @@ class CaseRequirement(BaseModel):
     case_type: Optional[str] = None
     description: Optional[str] = None
 
+
 class ExerciseRequirement(BaseModel):
     enabled: bool = True
     total_count: int = 0
     per_knowledge_point: int = 0
     types: List[str] = Field(default_factory=list)
 
+
 class InteractionRequirement(BaseModel):
     enabled: bool = True
     types: List[str] = Field(default_factory=list)
+
 
 class WarningRequirement(BaseModel):
     enabled: bool = False
     color: Optional[str] = None
 
+
 class AnimationRequirement(BaseModel):
     enabled: bool = False
+
 
 class SpecialRequirementsDetailed(BaseModel):
     cases: CaseRequirement = Field(default_factory=CaseRequirement)
@@ -93,6 +124,7 @@ class SpecialRequirementsDetailed(BaseModel):
     interaction: InteractionRequirement = Field(default_factory=InteractionRequirement)
     warnings: WarningRequirement = Field(default_factory=WarningRequirement)
     animations: AnimationRequirement = Field(default_factory=AnimationRequirement)
+
 
 class PageDistribution(BaseModel):
     cover: int = 1
@@ -105,49 +137,73 @@ class PageDistribution(BaseModel):
     interaction: int = 0  # 互动页（问答、讨论等）
     summary: int = 1
 
+
 class ParsingMetadata(BaseModel):
     """Simplified metadata - removed unused fields (借鉴 Presenton)"""
+
     raw_input: Optional[str] = None
     input_source: str = "text"
-    parsing_method: Literal["llm_extraction", "llm_extraction_with_tools", "heuristic", "mixed"] = "mixed"
+    parsing_method: Literal[
+        "llm_extraction", "llm_extraction_with_tools", "heuristic", "mixed"
+    ] = "mixed"
     request_id: Optional[str] = None
     timestamp: Optional[str] = None
+
 
 # ConfirmationStatusDetail 已移除 - 状态合并到 TeachingRequest.stage (借鉴 PPTAgent)
 # 保留注释说明迁移原因
 
+
 class TeachingRequest(BaseModel):
     """Refactored Module 3.1 output: highly structured teaching requirements."""
-    
+
     request_id: Optional[str] = None
     timestamp: Optional[str] = None
-    
+
     subject_info: SubjectInfo = Field(default_factory=SubjectInfo)
     knowledge_points: List[KnowledgePointDetail] = Field(default_factory=list)
     knowledge_structure: KnowledgeStructure = Field(default_factory=KnowledgeStructure)
-    
-    teaching_scenario: TeachingScenarioDetail = Field(default_factory=TeachingScenarioDetail)
-    teaching_objectives: TeachingObjectivesStructured = Field(default_factory=TeachingObjectivesStructured)
-    
-    slide_requirements: SlideRequirementsDetail = Field(default_factory=SlideRequirementsDetail)
-    special_requirements: SpecialRequirementsDetailed = Field(default_factory=SpecialRequirementsDetailed)
-    
-    estimated_page_distribution: PageDistribution = Field(default_factory=PageDistribution)
+
+    teaching_scenario: TeachingScenarioDetail = Field(
+        default_factory=TeachingScenarioDetail
+    )
+    teaching_objectives: TeachingObjectivesStructured = Field(
+        default_factory=TeachingObjectivesStructured
+    )
+
+    slide_requirements: SlideRequirementsDetail = Field(
+        default_factory=SlideRequirementsDetail
+    )
+    special_requirements: SpecialRequirementsDetailed = Field(
+        default_factory=SpecialRequirementsDetailed
+    )
+
+    estimated_page_distribution: PageDistribution = Field(
+        default_factory=PageDistribution
+    )
     parsing_metadata: ParsingMetadata = Field(default_factory=ParsingMetadata)
-    
+
     # ===== 内部状态字段 (保持状态机逻辑) =====
     # 用于内部多轮交互逻辑，使用 exclude=True 从对外 API 隐藏
     internal_interaction_stage: Literal[
-        "initial", "supplementing_kp", "confirm_kp", "confirm_pages",
-        "check_additional_kps", "add_additional_kps", "ask_config_modification",
-        "adjust_configurations", "confirm_goals", "final_confirm", "confirmed"
+        "initial",
+        "supplementing_kp",
+        "confirm_kp",
+        "confirm_pages",
+        "check_additional_kps",
+        "add_additional_kps",
+        "ask_config_modification",
+        "adjust_configurations",
+        "confirm_goals",
+        "final_confirm",
+        "confirmed",
     ] = Field(default="initial", exclude=False)
-    
+
     display_summary: Optional[str] = None
-    
+
     # Interaction metadata for tracking user modifications
     interaction_metadata: Dict[str, Any] = Field(default_factory=dict)
-    
+
     # ===== 扁平化高频字段 (借鉴 Presenton) =====
     # 这些字段会出现在 JSON 输出顶层，便于访问
     @computed_field
@@ -160,36 +216,36 @@ class TeachingRequest(BaseModel):
             return "ready"
         else:
             return "confirming"
-    
+
     @computed_field
     @property
     def subject(self) -> Optional[str]:
         """扁平化字段：学科名称"""
         return self.subject_info.subject_name
-    
+
     @computed_field
     @property
     def professional_category(self) -> ProfessionalCategory:
         """扁平化字段：专业领域"""
         return self.subject_info.subject_category
-    
+
     @computed_field
     @property
     def teaching_scene(self) -> TeachingScene:
         """扁平化字段：教学场景"""
         return self.teaching_scenario.scene_type
-    
+
     @computed_field
     @property
     def n_slides(self) -> Optional[int]:
         """扁平化字段：目标页数 (借鉴 Presenton 命名)"""
         return self.slide_requirements.target_count
-    
+
     # 兼容性别名 - 用于内部状态机逻辑
     @property
     def interaction_stage(self) -> str:
         return self.internal_interaction_stage
-    
+
     @interaction_stage.setter
     def interaction_stage(self, value):  # type: ignore
         self.internal_interaction_stage = value
@@ -199,40 +255,40 @@ class TeachingRequest(BaseModel):
     @subject.setter
     def subject(self, value: Optional[str]):
         self.subject_info.subject_name = value
-    
+
     @professional_category.setter
     def professional_category(self, value: ProfessionalCategory):
         self.subject_info.subject_category = value
-    
+
     @teaching_scene.setter
     def teaching_scene(self, value: TeachingScene):
         self.teaching_scenario.scene_type = value
-    
+
     @n_slides.setter
     def n_slides(self, value: Optional[int]):
         self.slide_requirements.target_count = value
-        
+
     # 保留其他 legacy 属性
     @property
     def slide_count(self) -> Optional[int]:
         return self.slide_requirements.target_count
-    
+
     @slide_count.setter
     def slide_count(self, value: Optional[int]):
         self.slide_requirements.target_count = value
-        
+
     @property
     def min_slide_count(self) -> Optional[int]:
         return self.slide_requirements.min_count
-    
+
     @min_slide_count.setter
     def min_slide_count(self, value: Optional[int]):
         self.slide_requirements.min_count = value
-        
+
     @property
     def teaching_goals(self) -> TeachingObjectivesStructured:
         return self.teaching_objectives
-    
+
     @property
     def kp_names(self) -> List[str]:
         return [kp.name for kp in self.knowledge_points]
@@ -241,15 +297,15 @@ class TeachingRequest(BaseModel):
     @property
     def include_cases(self) -> bool:
         return self.special_requirements.cases.enabled
-    
+
     @property
     def include_exercises(self) -> bool:
         return self.special_requirements.exercises.enabled
-    
+
     @property
     def include_interaction(self) -> bool:
         return self.special_requirements.interaction.enabled
-    
+
     @property
     def warning_mark(self) -> bool:
         return self.special_requirements.warnings.enabled
@@ -266,6 +322,7 @@ class ColorConfig(BaseModel):
     surface: Optional[str] = None
     background_gradient: Optional[str] = None
 
+
 class FontConfig(BaseModel):
     title_family: str
     body_family: str
@@ -273,6 +330,7 @@ class FontConfig(BaseModel):
     title_size: int = 34
     body_size: int = 22
     line_height: float = 1.2
+
 
 class LayoutConfig(BaseModel):
     density: Literal["compact", "comfortable"] = "comfortable"
@@ -282,17 +340,21 @@ class LayoutConfig(BaseModel):
     border_radius: str = "0px"
     box_shadow: Literal["none", "soft", "hard"] = "none"
 
+
 class AnimationConfig(BaseModel):
     transition: Literal["none", "slide", "fade", "zoom"] = "none"
     element_entry: Literal["none", "fade-up", "typewriter"] = "none"
+
 
 class ImageryConfig(BaseModel):
     image_style: str
     icon_style: str
     chart_preference: List[str] = Field(default_factory=list)
 
+
 class StyleConfig(BaseModel):
     """Module 3.2 output: standardized style config file."""
+
     style_name: str
     color: ColorConfig
     font: FontConfig
@@ -310,13 +372,18 @@ class StyleSampleSlide(BaseModel):
 
 class OutlineSlide(BaseModel):
     """Module 3.3 slide with enforced 'Zero Empty Slides' policy."""
+
     index: int
     slide_type: str
     title: str
-    bullets: List[str] = Field(default_factory=list, min_length=2, description="核心要点，至少2个")
+    bullets: List[str] = Field(
+        default_factory=list, min_length=2, description="核心要点，至少2个"
+    )
     notes: Optional[str] = None
     interactions: List[str] = Field(default_factory=list)
-    assets: List[Dict[str, Any]] = Field(default_factory=list, description="placeholders: type/theme/size/style")
+    assets: List[Dict[str, Any]] = Field(
+        default_factory=list, description="placeholders: type/theme/size/style"
+    )
 
 
 class PPTOutline(BaseModel):
@@ -333,7 +400,9 @@ class SlideElement(BaseModel):
     """Module 3.4 atomic element on a slide (for later web rendering in Module 3.5)."""
 
     id: str
-    type: Literal["text", "bullets", "image", "shape", "table", "chart", "diagram", "quiz"] = "text"
+    type: Literal[
+        "text", "bullets", "image", "shape", "table", "chart", "diagram", "quiz"
+    ] = "text"
 
     # Relative layout on a 16:9 slide canvas, normalized to [0, 1]
     x: float = 0.0
@@ -341,8 +410,12 @@ class SlideElement(BaseModel):
     w: float = 1.0
     h: float = 1.0
 
-    content: Dict[str, Any] = Field(default_factory=dict, description="Element payload by type")
-    style: Dict[str, Any] = Field(default_factory=dict, description="Element style overrides")
+    content: Dict[str, Any] = Field(
+        default_factory=dict, description="Element payload by type"
+    )
+    style: Dict[str, Any] = Field(
+        default_factory=dict, description="Element style overrides"
+    )
 
 
 class SlidePage(BaseModel):
@@ -352,7 +425,9 @@ class SlidePage(BaseModel):
     slide_type: str
     title: str
 
-    layout: Dict[str, Any] = Field(default_factory=dict, description="Layout template name + parameters")
+    layout: Dict[str, Any] = Field(
+        default_factory=dict, description="Layout template name + parameters"
+    )
     elements: List[SlideElement] = Field(default_factory=list)
 
     speaker_notes: Optional[str] = None
@@ -364,10 +439,13 @@ class SlideDeckContent(BaseModel):
     deck_title: str
     pages: List[SlidePage]
 
+
 class Question(BaseModel):
     key: str
     question: str
-    input_type: Literal["text", "select", "number", "bool", "list", "confirm_or_add"] = "text"
+    input_type: Literal[
+        "text", "select", "number", "bool", "list", "confirm_or_add"
+    ] = "text"
     options: Optional[List[str]] = None
     placeholder: Optional[str] = None
     required: bool = True
@@ -419,5 +497,6 @@ class SessionState(BaseModel):
     style_samples: List[StyleSampleSlide] = Field(default_factory=list)
     outline: Optional[PPTOutline] = None
     deck_content: Optional[SlideDeckContent] = None
-    stage: Literal["3.1", "3.2", "3.3", "3.4"] = "3.1"
-
+    render_result: Optional[Any] = Field(default=None, description="3.5模块渲染结果")
+    image_filler: Optional[Any] = Field(default=None, description="3.5模块图片生成器")
+    stage: Literal["3.1", "3.2", "3.3", "3.4", "3.5"] = "3.1"
