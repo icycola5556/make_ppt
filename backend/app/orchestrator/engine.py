@@ -17,7 +17,7 @@ from ..modules.intent import (
     recommend_slide_count_with_llm,
 )
 from ..modules.style import choose_style, build_style_samples, refine_style_with_llm
-from ..modules.outline import generate_outline, generate_outline_with_llm
+from ..modules.outline import generate_outline, generate_outline_with_llm, generate_outline_from_distribution
 from ..modules.outline.core import _refine_slide_types
 from ..modules.content import build_base_deck, refine_with_llm, validate_deck
 from ..prompts.intent import INTENT_SYSTEM_PROMPT, INTENT_SCHEMA_HINT
@@ -328,18 +328,32 @@ class WorkflowEngine:
         # 优先使用LLM智能规划
         if self.llm.is_enabled():
             try:
-                outline = await generate_outline_with_llm(
+                # 优先使用基于3.1预估分布的智能优化生成
+                outline = await generate_outline_from_distribution(
                     req=req,
-                    style_name=final_style_name,
                     llm=self.llm,
                     logger=self.logger,
                     session_id=session_id,
+                    style_name=final_style_name,
                 )
                 self.logger.emit(session_id, "3.3", "outline_final", outline.model_dump(mode="json"))
                 return outline
             except Exception as e:
-                # LLM调用失败，降级到确定性生成
-                self._handle_workflow_error(session_id, "3.3", e, {"fallback_to_deterministic": True})
+                # 降级到原有的LLM生成逻辑
+                self._handle_workflow_error(session_id, "3.3", e, {"fallback_to_llm_planning": True})
+                try:
+                    outline = await generate_outline_with_llm(
+                        req=req,
+                        style_name=final_style_name,
+                        llm=self.llm,
+                        logger=self.logger,
+                        session_id=session_id,
+                    )
+                    self.logger.emit(session_id, "3.3", "outline_final", outline.model_dump(mode="json"))
+                    return outline
+                except Exception as e2:
+                    # LLM调用失败，降级到确定性生成
+                    self._handle_workflow_error(session_id, "3.3", e2, {"fallback_to_deterministic": True})
         
         # 确定性生成（Fallback）
         outline = generate_outline(req, style_name=final_style_name)

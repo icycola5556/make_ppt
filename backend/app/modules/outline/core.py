@@ -303,21 +303,311 @@ OUTLINE_PLANNING_SYSTEM_PROMPT = _build_outline_planning_prompt()
 
 
 # ============================================================================
-# 确定性生成（Fallback）
+# 基于3.1预估分布的页面生成
 # ============================================================================
+
+def _has_valid_distribution(dist) -> bool:
+    """检查预估分布是否有效（总页数大于基础页数）"""
+    if dist is None:
+        return False
+    total = (
+        dist.cover + dist.objectives + dist.introduction +
+        dist.concept_definition + dist.explanation + dist.case_study +
+        dist.exercises + dist.interaction + dist.summary
+    )
+    return total > 3  # 至少包含封面+目标+总结以外的内容
+
+
+def _generate_fallback_bullets(slide_type: str, title: str, context: Dict[str, Any]) -> List[str]:
+    """根据页面类型生成有意义的 fallback bullets（通用辅助函数）"""
+    subject = context.get("subject", "本课程")
+    scene = context.get("scene", "theory")
+    
+    # 根据页面类型生成专属内容
+    fallback_map = {
+        "title": [
+            f"课程：{subject}",
+            "授课人：待编辑",
+            f"教学场景：{scene}",
+        ],
+        "cover": [
+            f"课程：{subject}",
+            "授课人：待编辑",
+            f"教学场景：{scene}",
+        ],
+        "objectives": [
+            f"知识目标：掌握{title}的核心概念",
+            f"能力目标：能够运用所学知识解决实际问题",
+            "素养目标：培养专业精神和规范意识",
+        ],
+        "intro": [
+            f"场景导入：{title}在实际工作中的应用",
+            "问题驱动：今天我们要解决什么问题？",
+            "学习路径：本节课的核心内容预览",
+        ],
+        "concept": [
+            f"{title}的定义与内涵",
+            f"{title}的组成要素",
+            f"{title}的关键特征",
+        ],
+        "content": [
+            f"{title}的基本原理",
+            f"{title}的应用条件",
+            f"{title}的实际操作要点",
+        ],
+        "steps": [
+            "操作步骤一：准备工作与环境检查",
+            "操作步骤二：执行核心操作流程",
+            "操作步骤三：结果验证与记录",
+        ],
+        "case": [
+            f"案例背景：{title}的实际应用情景",
+            "分析过程：如何运用所学知识解决问题",
+            "案例结论：经验总结与启示",
+        ],
+        "exercise": [
+            "练习题目：请根据所学内容回答以下问题",
+            "评分要点：准确性、完整性、规范性",
+            "参考答案：详见讲师备注",
+        ],
+        "discussion": [
+            "讨论话题：如何将所学知识应用到实际工作中？",
+            "引导问题：你认为最重要的知识点是什么？",
+            "拓展思考：还有哪些相关问题值得探讨？",
+        ],
+        "summary": [
+            f"本节核心收获：掌握{title}的关键要点",
+            "重点回顾：需要牢记的核心概念",
+            "下节预告：深入学习相关拓展知识",
+        ],
+        "warning": [
+            "安全警示：操作前必须检查设备状态",
+            "常见错误：避免以下操作失误",
+            "正确方法：规范操作的关键步骤",
+        ],
+    }
+    
+    # 使用映射获取fallback，如果没有则使用通用模板
+    return fallback_map.get(slide_type, [
+        f"{title}的核心内容",
+        f"{title}的重要知识点",
+        f"{title}的实践应用",
+    ])
+
+
+def _build_slides_from_distribution(req: TeachingRequest) -> List[OutlineSlide]:
+    """
+    根据 estimated_page_distribution 精确构建页面框架。
+    
+    返回按以下顺序组织的页面列表：
+    - cover (封面) x1
+    - objectives (目标) x1 
+    - introduction (导入) x dist.introduction
+    - concept_definition (定义) x dist.concept_definition
+    - explanation (讲解) x dist.explanation
+    - case_study (案例) x dist.case_study
+    - exercises (习题) x dist.exercises
+    - interaction (互动) x dist.interaction
+    - summary (总结) x1
+    """
+    dist = req.estimated_page_distribution
+    subj = req.subject or "未指定学科"
+    kps = req.kp_names or ["未指定知识点"]
+    first_kp = kps[0] if kps else "本知识点"
+    
+    slides: List[OutlineSlide] = []
+    
+    def add(slide_type: str, title: str, bullets: List[str], notes: str | None = None,
+            assets: List[Dict[str, Any]] | None = None, interactions: List[str] | None = None):
+        slides.append(
+            OutlineSlide(
+                index=len(slides) + 1,
+                slide_type=slide_type,
+                title=title,
+                bullets=bullets,
+                notes=notes,
+                assets=assets or [],
+                interactions=interactions or [],
+            )
+        )
+    
+    # === 1. 封面页 (cover) ===
+    add(
+        "title",
+        f"{subj}：{_deck_title(req)}",
+        [
+            "授课人：待编辑（可在前端修改）",
+            f"时间：{_get_current_semester()}",
+            f"教学场景：{req.teaching_scene}",
+        ],
+        notes="封面信息可在前端编辑区直接改。",
+    )
+    
+    # === 2. 教学目标页 (objectives) ===
+    goals = req.teaching_objectives
+    goal_bullets = []
+    if goals.knowledge:
+        goal_bullets.append(f"知识目标：{'；'.join(goals.knowledge)}")
+    if goals.ability:
+        goal_bullets.append(f"能力目标：{'；'.join(goals.ability)}")
+    if goals.literacy:
+        goal_bullets.append(f"素养目标：{'；'.join(goals.literacy)}")
+    add("objectives", "教学目标", goal_bullets or ["（待补充）"], notes="可根据班级学情进一步细化。")
+    
+    # === 3. 导入页 (introduction) ===
+    for i in range(dist.introduction):
+        add(
+            "intro",
+            f"课堂导入：{first_kp}的实际应用" if i == 0 else f"导入延伸 {i+1}",
+            [
+                f"场景引入：{first_kp}在实际工作中的应用场景",
+                "问题驱动：今天我们要解决什么问题？",
+                "学习路径：本节课的核心内容预览",
+            ],
+            assets=[{"type": "image", "theme": "scene_intro", "size": "16:9", "style": "photo"}],
+            interactions=["提问：你在哪些场景见过它？"] if req.include_interaction else [],
+        )
+    
+    # === 4. 概念定义页 (concept_definition) ===
+    kp_index = 0
+    for i in range(dist.concept_definition):
+        kp = kps[kp_index % len(kps)] if kps else first_kp
+        add(
+            "concept",
+            f"核心概念：{kp}",
+            [
+                f"{kp}的定义与内涵",
+                f"{kp}的组成要素与关键特征",
+                f"{kp}相关术语解释",
+            ],
+            assets=[{"type": "diagram", "theme": f"{kp}_definition", "size": "4:3", "style": "schematic"}],
+        )
+        kp_index += 1
+    
+    # === 5. 讲解页 (explanation) ===
+    kp_index = 0
+    for i in range(dist.explanation):
+        kp = kps[kp_index % len(kps)] if kps else first_kp
+        page_num = (i % 3) + 1
+        
+        if page_num == 1:
+            title = f"原理解析：{kp}的工作机制"
+            bullets = [
+                f"{kp}的基本工作原理",
+                f"{kp}的核心公式/逻辑",
+                f"{kp}的应用条件",
+            ]
+        elif page_num == 2:
+            title = f"深入讲解：{kp}的关键要点"
+            bullets = [
+                _generate_key_points(kp, 1),
+                _generate_key_points(kp, 2),
+                _generate_key_points(kp, 3),
+            ]
+        else:
+            title = f"拓展分析：{kp}的进阶内容"
+            bullets = [
+                f"{kp}的常见变体与应用场景",
+                f"{kp}与其他知识点的关联",
+                f"{kp}在实际中的注意事项",
+            ]
+            kp_index += 1
+        
+        add(
+            "content",
+            title,
+            bullets,
+            assets=[{"type": "diagram", "theme": f"{kp}_explanation_{page_num}", "size": "16:9"}],
+        )
+    
+    # === 6. 案例页 (case_study) ===
+    for i in range(dist.case_study):
+        add(
+            "case",
+            f"案例分析 {i+1}：{first_kp}的实际应用",
+            [
+                f"案例背景：{first_kp}在实际工作中的应用实例",
+                f"案例分析：如何运用{first_kp}的原理解决问题",
+                "案例结论：掌握理论与实践的结合方法",
+            ],
+            assets=[{"type": "image", "theme": f"case_image_{i+1}", "size": "16:9", "style": "photo"}],
+        )
+    
+    # === 7. 习题页 (exercises) ===
+    for i in range(dist.exercises):
+        add(
+            "exercise",
+            f"习题巩固 {i+1}" if dist.exercises > 1 else "习题巩固",
+            [
+                _generate_exercise_question(first_kp, req.subject or "", i * 3 + 1),
+                _generate_exercise_question(first_kp, req.subject or "", i * 3 + 2),
+                "参考答案/解析：详见讲师备注",
+            ],
+            interactions=["现场作答区"] if req.include_interaction else [],
+        )
+    
+    # === 8. 互动页 (interaction) ===
+    interaction_titles = ["课堂讨论", "小组活动", "问答环节"]
+    for i in range(dist.interaction):
+        title = interaction_titles[i % len(interaction_titles)]
+        add(
+            "discussion",
+            title,
+            [
+                f"讨论话题：{first_kp}在你的专业领域如何应用？",
+                "引导问题：你认为最重要的知识点是什么？",
+                "思考延伸：如何将今天所学应用到实际工作中？",
+            ],
+            interactions=["举手发言", "小组讨论", "弹幕互动"],
+        )
+    
+    # === 9. 总结页 (summary) ===
+    add(
+        "summary",
+        "课堂总结",
+        [
+            f"本节课你应该会：掌握{first_kp}的核心概念和应用",
+            f"关键记忆点：{first_kp}的定义、特点和使用场景",
+            "下节课预告：深入学习相关拓展知识",
+        ],
+        notes="可追加作业或拓展练习。",
+    )
+    
+    return slides
+
 
 def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPTOutline:
     """Generate a slide-level outline following 方案 3.3.
     
     This is a deterministic baseline. If LLM is enabled, the workflow may
     ask LLM to rewrite titles/bullets, but the structure is controlled here.
+    
+    优化：如果存在有效的预估分布，优先使用 _build_slides_from_distribution 生成。
     """
-
+    
+    # 优先使用3.1模块的预估分布生成页面结构
+    if _has_valid_distribution(req.estimated_page_distribution):
+        slides = _build_slides_from_distribution(req)
+        
+        # 重新索引
+        for idx, s in enumerate(slides, start=1):
+            s.index = idx
+        
+        return PPTOutline(
+            deck_title=f"{req.subject or '未指定学科'}：{_deck_title(req)}",
+            subject=req.subject or "未指定学科",
+            knowledge_points=req.kp_names or ["未指定知识点"],
+            teaching_scene=req.teaching_scene,
+            slides=slides,
+        )
+    
+    # Fallback: 原有的确定性逻辑
     title = _deck_title(req)
     subj = req.subject or "未指定学科"
     kps = req.kp_names or ["未指定知识点"]
 
     slides: List[OutlineSlide] = []
+
 
     def add(slide_type: str, title: str, bullets: List[str], notes: str | None = None, 
             assets: List[Dict[str, Any]] | None = None, interactions: List[str] | None = None):
@@ -584,8 +874,231 @@ def generate_outline(req: TeachingRequest, style_name: str | None = None) -> PPT
 
 
 # ============================================================================
-# LLM智能规划生成
+# 基于分布的LLM智能优化生成
 # ============================================================================
+
+# 页面类型专属优化prompts
+SLIDE_OPTIMIZATION_PROMPTS = {
+    "title": """你是课件标题设计师。请为封面页生成专业的副标题和授课信息。
+要求：
+1. 副标题简洁有力，突出课程特色
+2. 信息完整但不冗余
+3. 体现职业教育特点""",
+    
+    "objectives": """你是教学目标设计师。请根据知识点生成清晰的三维教学目标。
+要求：
+1. 知识目标：可测量、可验证
+2. 能力目标：突出职业技能
+3. 素养目标：体现职业精神""",
+    
+    "intro": """你是课堂导入设计师。请生成引人入胜的课堂导入内容。
+要求：
+1. 联系实际工作场景
+2. 提出驱动问题激发兴趣
+3. 建立与已学知识的联系""",
+    
+    "concept": """你是知识讲解专家。请为概念页生成专业定义和关键特征。
+要求：
+1. 定义准确、表述专业
+2. 突出核心特征
+3. 配合示例说明""",
+    
+    "content": """你是课程内容设计师。请为讲解页生成详细的内容要点。
+要求：
+1. 逻辑清晰、层次分明
+2. 理论联系实践
+3. 突出重点难点""",
+    
+    "case": """你是案例教学专家。请为案例页生成具体的案例分析。
+要求：
+1. 案例真实、贴近工作实际
+2. 分析过程完整
+3. 结论有指导意义""",
+    
+    "exercise": """你是习题设计专家。请为习题页生成适合难度的练习题。
+要求：
+1. 题目类型多样（选择/填空/简答）
+2. 难度适中，体现知识应用
+3. 提供评分要点""",
+    
+    "discussion": """你是课堂互动设计师。请为互动页生成讨论话题和引导问题。
+要求：
+1. 问题开放性强
+2. 能引发思考和讨论
+3. 联系实际工作场景""",
+    
+    "summary": """你是课程总结专家。请为总结页生成核心知识点回顾。
+要求：
+1. 突出核心收获
+2. 强调重点难点
+3. 预告后续学习内容""",
+}
+
+
+async def generate_outline_from_distribution(
+    req: TeachingRequest,
+    llm: Any,
+    logger: Any,
+    session_id: str,
+    style_name: Optional[str] = None,
+) -> PPTOutline:
+    """
+    根据3.1模块的预估页面分布，结合LLM智能优化，生成PPT大纲。
+    
+    流程：
+    1. 根据 req.estimated_page_distribution 确定性生成页面结构框架
+    2. 对每个页面调用LLM优化内容（bullets, assets, interactions）
+    3. 返回最终大纲
+    
+    Args:
+        req: 教学需求
+        llm: LLM客户端
+        logger: 日志记录器
+        session_id: 会话ID
+        style_name: 可选的样式名称
+        
+    Returns:
+        优化后的PPTOutline
+    """
+    import asyncio
+    
+    # 1. 检查预估分布是否有效
+    if not _has_valid_distribution(req.estimated_page_distribution):
+        logger.emit(session_id, "3.3", "distribution_invalid", {
+            "message": "预估分布无效，使用原有逻辑"
+        })
+        # 降级到原有的LLM生成或确定性生成
+        if llm.is_enabled():
+            return await generate_outline_with_llm(req, style_name, llm, logger, session_id)
+        return generate_outline(req, style_name)
+    
+    # 2. 根据预估分布生成页面框架
+    logger.emit(session_id, "3.3", "building_from_distribution", {
+        "distribution": req.estimated_page_distribution.model_dump()
+    })
+    slides = _build_slides_from_distribution(req)
+    
+    # 3. 如果LLM可用，优化每个页面的内容
+    if llm.is_enabled():
+        logger.emit(session_id, "3.3", "llm_optimization_start", {
+            "slide_count": len(slides)
+        })
+        
+        # 构建上下文信息
+        deck_context = {
+            "subject": req.subject,
+            "teaching_scene": req.teaching_scene,
+            "knowledge_points": req.kp_names,
+            "objectives": {
+                "knowledge": req.teaching_objectives.knowledge,
+                "ability": req.teaching_objectives.ability,
+                "literacy": req.teaching_objectives.literacy,
+            },
+            "total_slides": len(slides),
+        }
+        
+        # 并行优化所有页面
+        async def optimize_slide(slide: OutlineSlide) -> OutlineSlide:
+            """优化单个页面的内容"""
+            # 确定页面类型对应的prompt
+            slide_type_key = slide.slide_type
+            if slide_type_key not in SLIDE_OPTIMIZATION_PROMPTS:
+                # 根据页面类型映射到通用类型
+                type_mapping = {
+                    "title": "title",
+                    "objectives": "objectives",
+                    "intro": "intro",
+                    "concept": "concept",
+                    "principle": "content",
+                    "content": "content",
+                    "case": "case",
+                    "case_compare": "case",
+                    "exercise": "exercise",
+                    "exercises": "exercise",
+                    "discussion": "discussion",
+                    "qa": "discussion",
+                    "summary": "summary",
+                }
+                slide_type_key = type_mapping.get(slide.slide_type, "content")
+            
+            optimization_prompt = SLIDE_OPTIMIZATION_PROMPTS.get(slide_type_key, SLIDE_OPTIMIZATION_PROMPTS["content"])
+            
+            system_prompt = f"""{optimization_prompt}
+
+## 上下文
+- 学科：{deck_context['subject']}
+- 教学场景：{deck_context['teaching_scene']}
+- 知识点：{', '.join(deck_context['knowledge_points'])}
+
+## 输出格式
+返回JSON格式：
+{{
+  "bullets": ["要点1", "要点2", "要点3"],
+  "assets": [{{"type": "image|diagram|chart", "theme": "描述主题"}}],
+  "interactions": ["互动设计（如有）"]
+}}
+
+只输出JSON，不要解释。"""
+            
+            user_payload = {
+                "slide_index": slide.index,
+                "slide_type": slide.slide_type,
+                "title": slide.title,
+                "current_bullets": slide.bullets,
+            }
+            
+            try:
+                parsed, meta = await llm.chat_json(
+                    system_prompt,
+                    json.dumps(user_payload, ensure_ascii=False),
+                    '{"bullets": ["string"], "assets": [{"type": "string", "theme": "string"}], "interactions": ["string"]}',
+                    temperature=0.5,
+                )
+                
+                # 更新页面内容
+                if parsed:
+                    if parsed.get("bullets") and len(parsed["bullets"]) >= 2:
+                        slide.bullets = parsed["bullets"]
+                    if parsed.get("assets"):
+                        slide.assets = parsed["assets"]
+                    if parsed.get("interactions"):
+                        slide.interactions = parsed["interactions"]
+                
+                return slide
+                
+            except Exception as e:
+                logger.emit(session_id, "3.3", "slide_optimization_error", {
+                    "slide_index": slide.index,
+                    "error": str(e)
+                })
+                return slide  # 保持原有内容
+        
+        # 并行优化所有页面
+        optimized_slides = await asyncio.gather(*[optimize_slide(s) for s in slides])
+        slides = list(optimized_slides)
+        
+        logger.emit(session_id, "3.3", "llm_optimization_complete", {
+            "optimized_count": len(slides)
+        })
+    
+    # 4. 重新索引并返回
+    for idx, s in enumerate(slides, start=1):
+        s.index = idx
+    
+    outline = PPTOutline(
+        deck_title=f"{req.subject or '未指定学科'}：{_deck_title(req)}",
+        subject=req.subject or "未指定学科",
+        knowledge_points=req.kp_names or ["未指定知识点"],
+        teaching_scene=req.teaching_scene,
+        slides=slides,
+    )
+    
+    logger.emit(session_id, "3.3", "outline_from_distribution_complete", {
+        "total_slides": len(slides),
+        "distribution_used": req.estimated_page_distribution.model_dump()
+    })
+    
+    return outline
 
 
 # ============================================================================
@@ -656,15 +1169,19 @@ async def generate_outline_structure(
         # 3. Construct PPTOutline (with placeholder bullets to satisfy min_length=2 validation)
         slides_data = parsed.get("slides", [])
         slides = []
+        
+        # 构建上下文供 fallback 使用
+        deck_context = {
+            "subject": req.subject,
+            "scene": req.teaching_scene,
+            "objectives": req.teaching_objectives.knowledge,
+        }
+        
         for i, s in enumerate(slides_data, 1):
             slide_title = s.get("title", f"Page {i}")
             slide_type = s.get("slide_type", "content")
-            # Provide placeholder bullets to satisfy OutlineSlide.bullets min_length=2 validation
-            # These will be filled with real content by expand_slide_details later
-            placeholder_bullets = [
-                f"关于{slide_title}的核心要点",
-                f"{slide_type}类型页面的说明内容"
-            ]
+            # 使用有意义的 fallback bullets (会被 expand_slide_details 覆盖)
+            placeholder_bullets = _generate_fallback_bullets(slide_type, slide_title, deck_context)
             slides.append(OutlineSlide(
                 index=i,
                 slide_type=slide_type,
@@ -674,6 +1191,7 @@ async def generate_outline_structure(
                 assets=[],
                 interactions=[]
             ))
+
             
         outline = PPTOutline(
             deck_title=req.subject, # Simple default
@@ -796,12 +1314,8 @@ async def expand_slide_details(
         if bullets and isinstance(bullets, list) and len(bullets) > 0:
             slide.bullets = bullets
         else:
-            # Generate fallback bullets based on slide type and title
-            slide.bullets = [
-                f"关于{slide.title}的核心要点",
-                f"{slide.slide_type}类型页面的说明内容",
-                "详细内容待补充"
-            ]
+            # Generate fallback bullets based on slide type and title (使用更有意义的内容)
+            slide.bullets = _generate_fallback_bullets(slide.slide_type, slide.title, deck_context)
             print(f"[DEBUG] expand_slide {slide.index}: using fallback bullets (parsed was empty)")
         
         slide.assets = parsed.get("assets", slide.assets) if parsed else slide.assets
@@ -811,13 +1325,10 @@ async def expand_slide_details(
         
     except Exception as e:
         print(f"[ERROR] expand_slide {slide.index}: {e}")
-        # Provide fallback bullets on error
-        slide.bullets = [
-            f"关于{slide.title}的核心要点",
-            f"{slide.slide_type}类型页面的说明内容",
-            "详细内容待补充"
-        ]
+        # Provide fallback bullets on error (使用更有意义的内容)
+        slide.bullets = _generate_fallback_bullets(slide.slide_type, slide.title, deck_context)
         return slide
+
 
 # Keep original monolithic function for backward compatibility or direct fallback
 async def generate_outline_with_llm(
