@@ -211,7 +211,7 @@ def build_base_deck(req: TeachingRequest, style: StyleConfig, outline: PPTOutlin
                     w=0.88,
                     h=0.20,
                     content={
-                        "text": f"学科：{req.subject or outline.subject or '_____'}\n知识点：{', '.join(outline.knowledge_points) if outline.knowledge_points else '_____'}\n课时：{req.lesson_duration_min or '____'} 分钟",
+                        "text": f"学科：{req.subject_info.subject_name if req.subject_info else (outline.subject or '_____')}\n知识点：{', '.join(outline.knowledge_points) if outline.knowledge_points else '_____'}\n课时：{req.slide_requirements.lesson_duration_min if req.slide_requirements else '____'} 分钟",
                         "role": "subtitle",
                     },
                     style={"role": "subtitle"},

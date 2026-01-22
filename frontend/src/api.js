@@ -101,6 +101,22 @@ export const api = {
     })
   },
 
+  // 3.4 -> 3.5 过渡：强制保存内容
+  updateDeck(session_id, deck_content) {
+    return http('/api/workflow/deck/update', {
+      method: 'POST',
+      body: { session_id, deck_content }
+    })
+  },
+
+  // 3.4 -> 3.5 核心修复：发送内容列表，由后端组装
+  assembleDeck(session_id, contents) {
+    return http('/api/workflow/deck/assemble', {
+      method: 'POST',
+      body: { session_id, contents }
+    })
+  },
+
   // ======= 3.5 图片生成 =======
   triggerImageGeneration(session_id) {
     return http(`/api/workflow/render/generate/${session_id}`, { method: 'POST' })

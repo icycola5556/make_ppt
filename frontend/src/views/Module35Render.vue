@@ -363,9 +363,23 @@ export default {
     }
 
     onMounted(() => {
-      const sid = getSessionId()
+      const urlParams = new URLSearchParams(window.location.search)
+      const sid = urlParams.get('session_id') || props.initialSessionId
+      const shouldAutoRun = urlParams.get('auto_run') === 'true'
+
       if (sid) {
         sessionId.value = sid
+        
+        // ✅ 新增：如果检测到自动运行标记，且没有正在加载，则自动触发
+        if (shouldAutoRun && !loading.value) {
+          console.log('Auto-running workflow based on URL param...')
+          // 清除 URL 中的 auto_run 参数，防止刷新页面重复触发
+          const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + `?session_id=${sid}`;
+          window.history.replaceState({path: newUrl}, '', newUrl);
+          
+          // 触发正常渲染流程
+          runFullWorkflow()
+        }
       }
 
       // 监听来自 iframe 的消息
