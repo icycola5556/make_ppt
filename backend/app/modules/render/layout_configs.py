@@ -188,6 +188,90 @@ VOCATIONAL_LAYOUTS = {
         max_bullets=4,
         max_text_length=200,
     ),
+    
+    # ========== 新增多样化布局 ==========
+    
+    "table_comparison": LayoutConfig(
+        layout_id="table_comparison",
+        display_name="表格对比",
+        description="双列表格对比布局,适合参数/特性对比",
+        grid_template_areas='"title title" "table table"',
+        grid_template_columns="1fr 1fr",
+        grid_template_rows="auto 1fr",
+        gap="1.5rem",
+        image_slots=[],
+        suitable_slide_types=["comparison", "concept", "keypoints"],
+        suitable_keywords=["对比", "参数", "特性", "比较", "表格", "数据"],
+        max_bullets=8,
+        max_text_length=500,
+    ),
+    
+    "timeline_horizontal": LayoutConfig(
+        layout_id="timeline_horizontal",
+        display_name="水平时间轴",
+        description="横向时间线/流程展示,适合阶段性内容",
+        grid_template_areas='"title title title" "step1 step2 step3"',
+        grid_template_columns="1fr 1fr 1fr",
+        grid_template_rows="auto 1fr",
+        gap="1rem",
+        image_slots=[],
+        suitable_slide_types=["steps", "process", "history"],
+        suitable_keywords=["阶段", "阶段", "历程", "发展", "时间", "演变"],
+        max_bullets=6,
+        max_text_length=300,
+    ),
+    
+    "center_visual": LayoutConfig(
+        layout_id="center_visual",
+        display_name="中心视觉",
+        description="大图居中,标题在上,说明在下",
+        grid_template_areas='"title" "image" "caption"',
+        grid_template_columns="1fr",
+        grid_template_rows="auto 1fr auto",
+        gap="1rem",
+        image_slots=[
+            {
+                "position": "center",
+                "x": 0.15,
+                "y": 0.18,
+                "w": 0.70,
+                "h": 0.60,
+                "aspect_ratio": "16:9",
+                "default_style": "photo",
+                "priority": 1,
+            }
+        ],
+        suitable_slide_types=["concept", "demo", "showcase"],
+        suitable_keywords=["展示", "核心", "重点", "关键", "主图"],
+        max_bullets=3,
+        max_text_length=200,
+    ),
+    
+    "split_vertical": LayoutConfig(
+        layout_id="split_vertical",
+        display_name="上下分栏",
+        description="上图下文或上文下图布局",
+        grid_template_areas='"title" "top" "bottom"',
+        grid_template_columns="1fr",
+        grid_template_rows="auto 1fr 1fr",
+        gap="1rem",
+        image_slots=[
+            {
+                "position": "top",
+                "x": 0.06,
+                "y": 0.15,
+                "w": 0.88,
+                "h": 0.38,
+                "aspect_ratio": "21:9",
+                "default_style": "photo",
+                "priority": 1,
+            }
+        ],
+        suitable_slide_types=["concept", "intro", "overview"],
+        suitable_keywords=["全景", "俯视", "概览", "场景"],
+        max_bullets=4,
+        max_text_length=250,
+    ),
 }
 
 
