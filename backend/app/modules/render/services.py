@@ -2,6 +2,7 @@
 Module 3.5: 图片生成服务 (Services)
 负责调用 DashScope API 生成图片，管理缓存和重试逻辑。
 """
+import os
 import asyncio
 import hashlib
 import logging
@@ -226,7 +227,7 @@ class ImageService:
             
             response = ImageSynthesis.call(
                 api_key=self.api_key,
-                model="qwen-image-plus",
+                model=os.getenv("DASHSCOPE_IMAGE_MODEL", "qwen-image-plus"),
                 prompt=prompt,
                 n=1,
                 size=size,
