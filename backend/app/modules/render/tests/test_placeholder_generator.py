@@ -4,14 +4,8 @@
 
 import pytest
 from app.common.schemas import SlidePage, SlideElement
-from app.modules.render.placeholder_generator import (
-    create_image_placeholders_for_page,
-    _extract_theme_from_page,
-    _extract_keywords,
-    _build_context,
-    _infer_visual_style,
-)
-from app.modules.render.schemas import ImageStyle
+from app.modules.render.engine import LayoutEngine
+from app.modules.render.core import ImageStyle
 
 
 def test_extract_theme_from_page_with_placeholder():
@@ -32,7 +26,7 @@ def test_extract_theme_from_page_with_placeholder():
         ],
     )
     
-    theme = _extract_theme_from_page(page, {})
+    theme = LayoutEngine._extract_theme_from_page(page, {})
     assert theme == "液压系统工作原理图"
 
 
@@ -51,13 +45,13 @@ def test_extract_theme_from_page_without_placeholder():
         ],
     )
     
-    theme = _extract_theme_from_page(page, {})
+    theme = LayoutEngine._extract_theme_from_page(page, {})
     assert theme == "机械传动装置"
 
 
 def test_extract_keywords():
     """测试关键词提取"""
-    keywords = _extract_keywords("液压系统工作原理", "液压缸结构图")
+    keywords = LayoutEngine._extract_keywords("液压系统工作原理", "液压缸结构图")
     
     # 应该包含关键词,不包含停用词
     assert len(keywords) > 0
@@ -87,7 +81,7 @@ def test_build_context():
         ],
     )
     
-    context = _build_context(page)
+    context = LayoutEngine._build_context(page)
     assert "液压系统原理" in context
     assert "液压缸的工作原理" in context
     assert "压力控制方法" in context
@@ -99,16 +93,16 @@ def test_infer_visual_style():
     """测试视觉风格推断"""
     # 测试从 slot_def 获取
     slot_def = {"default_style": "photo"}
-    assert _infer_visual_style("concept", slot_def) == ImageStyle.PHOTO
+    assert LayoutEngine._infer_visual_style("concept", slot_def) == ImageStyle.PHOTO
     
     # 测试从 slide_type 推断
-    assert _infer_visual_style("concept", {}) == ImageStyle.SCHEMATIC
-    assert _infer_visual_style("steps", {}) == ImageStyle.DIAGRAM
-    assert _infer_visual_style("warning", {}) == ImageStyle.WARNING
-    assert _infer_visual_style("cover", {}) == ImageStyle.ILLUSTRATION
+    assert LayoutEngine._infer_visual_style("concept", {}) == ImageStyle.SCHEMATIC
+    assert LayoutEngine._infer_visual_style("steps", {}) == ImageStyle.DIAGRAM
+    assert LayoutEngine._infer_visual_style("warning", {}) == ImageStyle.WARNING
+    assert LayoutEngine._infer_visual_style("cover", {}) == ImageStyle.ILLUSTRATION
     
     # 测试默认值
-    assert _infer_visual_style("unknown", {}) == ImageStyle.PHOTO
+    assert LayoutEngine._infer_visual_style("unknown", {}) == ImageStyle.PHOTO
 
 
 def test_create_image_placeholders_for_page():
@@ -140,7 +134,7 @@ def test_create_image_placeholders_for_page():
     )
     
     # 使用 title_bullets_right_img 布局 (1 个图片插槽)
-    slots = create_image_placeholders_for_page(page, "title_bullets_right_img", 1)
+    slots = LayoutEngine._generate_image_slots(page, "title_bullets_right_img", 1)
     
     assert len(slots) == 1
     slot = slots[0]
@@ -173,7 +167,7 @@ def test_create_image_placeholders_grid_4():
         elements=[],
     )
     
-    slots = create_image_placeholders_for_page(page, "grid_4", 2)
+    slots = LayoutEngine._generate_image_slots(page, "grid_4", 2)
     
     # grid_4 应该有 4 个图片插槽
     assert len(slots) == 4
@@ -196,7 +190,7 @@ def test_create_image_placeholders_no_slots():
         elements=[],
     )
     
-    slots = create_image_placeholders_for_page(page, "title_only", 1)
+    slots = LayoutEngine._generate_image_slots(page, "title_only", 1)
     
     # title_only 应该没有图片插槽
     assert len(slots) == 0

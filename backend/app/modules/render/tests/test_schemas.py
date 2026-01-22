@@ -3,7 +3,7 @@
 """
 
 import pytest
-from app.modules.render.schemas import (
+from app.modules.render.core import (
     ImageSlotRequest,
     RenderResult,
     LayoutConfig,

@@ -1,18 +1,26 @@
 """
-Module 3.5: 布局配置定义
-
-定义 6 种 MVP 核心布局模板
+Module 3.5: 配置定义 (Configs & Constants)
+包含布局模板定义、不仅路径配置等。
 """
-
-from .schemas import LayoutConfig
+from pathlib import Path
+from .core import LayoutConfig
 
 # ============================================================================
-# MVP 阶段: 6 种核心布局
+# Path Constants
+# ============================================================================
+
+MODULE_DIR = Path(__file__).parent
+TEMPLATE_DIR = MODULE_DIR / "templates"
+SRC_STATIC_DIR = MODULE_DIR / "static"
+SRC_STYLES_DIR = MODULE_DIR / "styles"
+
+# ============================================================================
+# Layout Definitions
 # ============================================================================
 
 VOCATIONAL_LAYOUTS = {
     # ========== 基础布局 ==========
-    
+    #纯标题页
     "title_only": LayoutConfig(
         layout_id="title_only",
         display_name="纯标题页",
@@ -28,6 +36,7 @@ VOCATIONAL_LAYOUTS = {
         max_text_length=50,
     ),
     
+    #标题+要点
     "title_bullets": LayoutConfig(
         layout_id="title_bullets",
         display_name="标题+要点",
@@ -44,13 +53,14 @@ VOCATIONAL_LAYOUTS = {
     ),
     
     # ========== 职教核心布局 ==========
-    
+    #左文右图
     "title_bullets_right_img": LayoutConfig(
         layout_id="title_bullets_right_img",
-        display_name="左文右图",
-        description="最常用布局,左侧要点,右侧图片",
+        display_name="左文右图（动态版）",
+        description="最常用布局,左侧要点,右侧图片，支持动态比例",
         grid_template_areas='"title title" "bullets image"',
-        grid_template_columns="3fr 2fr",
+        # 支持动态变量
+        grid_template_columns="var(--col-text, 3fr) var(--col-img, 2fr)",
         grid_template_rows="auto 1fr",
         gap="2rem",
         image_slots=[
@@ -68,9 +78,10 @@ VOCATIONAL_LAYOUTS = {
         suitable_slide_types=["concept", "intro", "keypoints"],
         suitable_keywords=["概念", "定义", "介绍", "要点"],
         max_bullets=6,
-        max_text_length=350,
+        max_text_length=450, 
     ),
     
+    #左图右步骤
     "operation_steps": LayoutConfig(
         layout_id="operation_steps",
         display_name="左图右步骤",
@@ -97,6 +108,7 @@ VOCATIONAL_LAYOUTS = {
         max_text_length=300,
     ),
     
+    #左右对比
     "concept_comparison": LayoutConfig(
         layout_id="concept_comparison",
         display_name="左右对比",
@@ -133,6 +145,7 @@ VOCATIONAL_LAYOUTS = {
         max_text_length=250,
     ),
     
+    #四宫格
     "grid_4": LayoutConfig(
         layout_id="grid_4",
         display_name="四宫格",
@@ -191,6 +204,7 @@ VOCATIONAL_LAYOUTS = {
     
     # ========== 新增多样化布局 ==========
     
+    #表格对比
     "table_comparison": LayoutConfig(
         layout_id="table_comparison",
         display_name="表格对比",
@@ -206,6 +220,7 @@ VOCATIONAL_LAYOUTS = {
         max_text_length=500,
     ),
     
+    #水平时间轴
     "timeline_horizontal": LayoutConfig(
         layout_id="timeline_horizontal",
         display_name="水平时间轴",
@@ -221,6 +236,7 @@ VOCATIONAL_LAYOUTS = {
         max_text_length=300,
     ),
     
+    #中心视觉
     "center_visual": LayoutConfig(
         layout_id="center_visual",
         display_name="中心视觉",
@@ -247,6 +263,7 @@ VOCATIONAL_LAYOUTS = {
         max_text_length=200,
     ),
     
+    #上下分栏
     "split_vertical": LayoutConfig(
         layout_id="split_vertical",
         display_name="上下分栏",
@@ -273,44 +290,3 @@ VOCATIONAL_LAYOUTS = {
         max_text_length=250,
     ),
 }
-
-
-def get_layout(layout_id: str) -> LayoutConfig:
-    """获取布局配置"""
-    return VOCATIONAL_LAYOUTS.get(layout_id)
-
-
-
-def get_all_layouts() -> dict[str, LayoutConfig]:
-    """获取所有布局配置"""
-    return VOCATIONAL_LAYOUTS
-
-
-def get_layout_schema_for_llm() -> list[dict]:
-    """
-    Export simplified layout registry for LLM Layout Decision Agent.
-    
-    Returns:
-        List of simplified layout definitions
-    """
-    schemas = []
-    
-    for layout_id, config in VOCATIONAL_LAYOUTS.items():
-        # Count image slots
-        img_count = len(config.image_slots)
-        
-        # Prepare schema
-        schema = {
-            "layout_id": layout_id,
-            "name": config.display_name,
-            "description": config.description,
-            "requirements": {
-                "image_slots": img_count,
-                "text_structure": "bullets" if config.max_bullets and config.max_bullets > 0 else "paragraph",
-                "max_items": config.max_bullets or 0
-            },
-            "suitable_for": config.suitable_keywords
-        }
-        schemas.append(schema)
-        
-    return schemas

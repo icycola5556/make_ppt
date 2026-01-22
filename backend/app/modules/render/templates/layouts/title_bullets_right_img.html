@@ -12,7 +12,7 @@
         {% set slot = slide.image_slots[0] %}
         <div class="image-placeholder" data-slot-id="{{ slot.slot_id }}">
             <div class="placeholder-content">
-                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <img src="/static/icons/image.svg" class="placeholder-icon" alt="图片">
                 <p class="placeholder-text">{{ slot.theme }}</p>
                 <span class="placeholder-tags">{{ slot.keywords|join(', ') }}</span>
             </div>

@@ -6,17 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ deck_title }}</title>
 
-    <!-- Reveal.js 核心样式 (本地) -->
-    <link rel="stylesheet" href="/static/reveal.js/reveal.js-4.6.1/dist/reveal.css">
-    <link rel="stylesheet" href="/static/reveal.js/reveal.js-4.6.1/dist/theme/white.css">
+    <!-- Reveal.js 核心样式 (本地/离线兼容) -->
+    <link rel="stylesheet" href="./static/reveal.js/reveal.js-4.6.1/dist/reveal.css">
+    <link rel="stylesheet" href="./static/reveal.js/reveal.js-4.6.1/dist/theme/white.css">
 
     <!-- 字体配置 (系统字体栈) -->
-    <link rel="stylesheet" href="/static/fonts/fonts.css">
+    <link rel="stylesheet" href="./static/fonts/fonts.css">
 
     <!-- 自定义样式 -->
-    <link rel="stylesheet" href="/styles/layouts/vocational.css">
-    <link rel="stylesheet" href="/styles/components/image-slot.css">
-    <link rel="stylesheet" href="/styles/themes/{{ theme_name }}.css">
+    <link rel="stylesheet" href="./styles/layouts/vocational.css">
+    <link rel="stylesheet" href="./styles/components/image-slot.css">
+    <link rel="stylesheet" href="./styles/themes/{{ theme_name }}.css">
 
     <style>
         /* CSS Variables - 从 StyleConfig 动态生成 */
@@ -27,10 +27,206 @@
                 }
             }
         }
+
+        /* ✨ Premium 视觉效果 - 渐变背景 */
+        .reveal {
+            background: var(--color-background);
+            background: var(--color-bg-gradient, var(--color-background));
+        }
+
+        /* ✨ 毛玻璃卡片效果 (Glassmorphism) */
+        .slide-content,
+        .bullets-container,
+        .content-bullets,
+        .content-steps,
+        .comparison-left,
+        .comparison-right,
+        .grid-item {
+            background: var(--color-surface, rgba(255, 255, 255, 0.8));
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* 深色主题下的毛玻璃调整 */
+        .reveal[data-theme="dark"] .slide-content,
+        .reveal[data-theme="dark"] .bullets-container {
+            background: var(--color-surface, rgba(30, 41, 59, 0.7));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* 图片生成控制面板 */
+        .image-generation-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 9999;
+            min-width: 300px;
+        }
+
+        .image-generation-panel h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .image-generation-panel button {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .image-generation-panel button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .image-generation-panel button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin-top: 10px;
+            display: none;
+        }
+
+        .progress-container.visible {
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .progress-status {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #333;
+            text-align: center;
+        }
+
+        .progress-status.success {
+            color: #27ae60;
+        }
+
+        .progress-status.warning {
+            color: #f39c12;
+        }
+
+        /* 加载动画 */
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+        }
+
+        .loading-container p {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .error-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #e74c3c;
+        }
+
+        .error-container button {
+            margin-top: 10px;
+            padding: 5px 15px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
     </style>
 </head>
 
 <body>
+    <!-- 图片生成状态监控面板（只读模式，由 Vue 前端控制生成） -->
+    <div class="image-generation-panel">
+        <h4>📊 智能配图状态</h4>
+        <div style="margin-bottom: 10px;">
+            <button id="generateImagesBtn" onclick="startGeneration()"
+                style="padding: 5px 15px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;">🚀
+                开始生成教学配图</button>
+        </div>
+        <div class="progress-container" id="imageProgressContainer" style="display: block;">
+            <div class="progress-bar">
+                <div class="progress-bar-fill" id="imageProgressBar">0%</div>
+            </div>
+            <div class="progress-text">
+                <span id="imageProgressText">0 / 0</span>
+                <span id="imageProgressLabel">等待生成...</span>
+            </div>
+            <div class="progress-status" id="imageProgressStatus">请在 Vue 前端点击"开始生成教学配图"</div>
+        </div>
+    </div>
+
     <div class="reveal">
         <div class="slides">
             {% for slide in slides %}
@@ -39,8 +235,8 @@
         </div>
     </div>
 
-    <!-- Reveal.js 核心脚本 (本地) -->
-    <script src="/static/reveal.js/reveal.js-4.6.1/dist/reveal.js"></script>
+    <!-- Reveal.js 核心脚本 (本地/离线兼容) -->
+    <script src="./static/reveal.js/reveal.js-4.6.1/dist/reveal.js"></script>
 
     <script>
         // Reveal.js 配置 (导出友好,无 3D 效果)
@@ -72,7 +268,6 @@
             // 插件 (可选)
             plugins: []
         });
-    </script>
     </script>
 
     <!-- 图片状态轮询脚本 -->

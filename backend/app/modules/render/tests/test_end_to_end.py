@@ -17,17 +17,17 @@ from app.common.schemas import (
     StyleConfig,
     ColorConfig,
     FontConfig,
-    LayoutConfig as StyleLayoutConfig,
+    LayoutConfig,
     ImageryConfig,
     TeachingRequest,
-    KnowledgePoint,
+    KnowledgePointDetail,
 )
 from app.modules.render import render_html_slides
 
 
 def create_mock_slide_deck() -> SlideDeckContent:
     """创建模拟的 3.4 输出数据"""
-    
+
     pages = [
         # 封面页
         SlidePage(
@@ -39,14 +39,16 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem1",
                     type="text",
-                    x=0.1, y=0.4, w=0.8, h=0.2,
+                    x=0.1,
+                    y=0.4,
+                    w=0.8,
+                    h=0.2,
                     content={"text": "授课人: 张老师"},
                     style={"role": "body"},
                 ),
             ],
             speaker_notes="",
         ),
-        
         # 教学目标页
         SlidePage(
             index=2,
@@ -57,7 +59,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem1",
                     type="bullets",
-                    x=0.1, y=0.2, w=0.8, h=0.7,
+                    x=0.1,
+                    y=0.2,
+                    w=0.8,
+                    h=0.7,
                     content={
                         "items": [
                             "知识目标：掌握液压系统的基本组成和工作原理",
@@ -70,7 +75,6 @@ def create_mock_slide_deck() -> SlideDeckContent:
             ],
             speaker_notes="",
         ),
-        
         # 概念讲解页 (左文右图)
         SlidePage(
             index=3,
@@ -81,7 +85,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem1",
                     type="bullets",
-                    x=0.05, y=0.2, w=0.5, h=0.7,
+                    x=0.05,
+                    y=0.2,
+                    w=0.5,
+                    h=0.7,
                     content={
                         "items": [
                             "动力元件：液压泵,提供压力油",
@@ -95,7 +102,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem2",
                     type="image",
-                    x=0.6, y=0.2, w=0.35, h=0.7,
+                    x=0.6,
+                    y=0.2,
+                    w=0.35,
+                    h=0.7,
                     content={
                         "placeholder": True,
                         "kind": "diagram",
@@ -107,7 +117,6 @@ def create_mock_slide_deck() -> SlideDeckContent:
             ],
             speaker_notes="重点讲解各部件的作用",
         ),
-        
         # 操作步骤页 (左图右步骤)
         SlidePage(
             index=4,
@@ -118,7 +127,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem1",
                     type="image",
-                    x=0.05, y=0.2, w=0.4, h=0.7,
+                    x=0.05,
+                    y=0.2,
+                    w=0.4,
+                    h=0.7,
                     content={
                         "placeholder": True,
                         "kind": "photo",
@@ -130,7 +142,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem2",
                     type="bullets",
-                    x=0.5, y=0.2, w=0.45, h=0.7,
+                    x=0.5,
+                    y=0.2,
+                    w=0.45,
+                    h=0.7,
                     content={
                         "items": [
                             "检查油箱油位,确保油量充足",
@@ -145,7 +160,6 @@ def create_mock_slide_deck() -> SlideDeckContent:
             ],
             speaker_notes="强调安全操作规范",
         ),
-        
         # 对比页
         SlidePage(
             index=5,
@@ -156,7 +170,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem1",
                     type="image",
-                    x=0.05, y=0.2, w=0.42, h=0.6,
+                    x=0.05,
+                    y=0.2,
+                    w=0.42,
+                    h=0.6,
                     content={
                         "placeholder": True,
                         "kind": "photo",
@@ -168,14 +185,20 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem2",
                     type="text",
-                    x=0.05, y=0.82, w=0.42, h=0.1,
+                    x=0.05,
+                    y=0.82,
+                    w=0.42,
+                    h=0.1,
                     content={"text": "✓ 正确操作"},
                     style={"role": "body"},
                 ),
                 SlideElement(
                     id="elem3",
                     type="image",
-                    x=0.53, y=0.2, w=0.42, h=0.6,
+                    x=0.53,
+                    y=0.2,
+                    w=0.42,
+                    h=0.6,
                     content={
                         "placeholder": True,
                         "kind": "warning",
@@ -187,14 +210,16 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem4",
                     type="text",
-                    x=0.53, y=0.82, w=0.42, h=0.1,
+                    x=0.53,
+                    y=0.82,
+                    w=0.42,
+                    h=0.1,
                     content={"text": "✗ 错误操作"},
                     style={"role": "body"},
                 ),
             ],
             speaker_notes="",
         ),
-        
         # 工具展示页 (四宫格)
         SlidePage(
             index=6,
@@ -205,7 +230,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem1",
                     type="image",
-                    x=0.05, y=0.2, w=0.42, h=0.35,
+                    x=0.05,
+                    y=0.2,
+                    w=0.42,
+                    h=0.35,
                     content={
                         "placeholder": True,
                         "kind": "photo",
@@ -217,7 +245,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem2",
                     type="image",
-                    x=0.53, y=0.2, w=0.42, h=0.35,
+                    x=0.53,
+                    y=0.2,
+                    w=0.42,
+                    h=0.35,
                     content={
                         "placeholder": True,
                         "kind": "photo",
@@ -229,7 +260,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem3",
                     type="image",
-                    x=0.05, y=0.6, w=0.42, h=0.35,
+                    x=0.05,
+                    y=0.6,
+                    w=0.42,
+                    h=0.35,
                     content={
                         "placeholder": True,
                         "kind": "photo",
@@ -241,7 +275,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem4",
                     type="image",
-                    x=0.53, y=0.6, w=0.42, h=0.35,
+                    x=0.53,
+                    y=0.6,
+                    w=0.42,
+                    h=0.35,
                     content={
                         "placeholder": True,
                         "kind": "photo",
@@ -253,7 +290,6 @@ def create_mock_slide_deck() -> SlideDeckContent:
             ],
             speaker_notes="",
         ),
-        
         # 总结页
         SlidePage(
             index=7,
@@ -264,7 +300,10 @@ def create_mock_slide_deck() -> SlideDeckContent:
                 SlideElement(
                     id="elem1",
                     type="bullets",
-                    x=0.1, y=0.2, w=0.8, h=0.7,
+                    x=0.1,
+                    y=0.2,
+                    w=0.8,
+                    h=0.7,
                     content={
                         "items": [
                             "掌握了液压系统的基本组成",
@@ -279,7 +318,7 @@ def create_mock_slide_deck() -> SlideDeckContent:
             speaker_notes="",
         ),
     ]
-    
+
     return SlideDeckContent(
         deck_title="液压系统工作原理",
         pages=pages,
@@ -300,19 +339,23 @@ def create_mock_style_config() -> StyleConfig:
             warning="#e74c3c",
         ),
         font=FontConfig(
-            title_font="PingFang SC",
-            body_font="PingFang SC",
+            title_family="PingFang SC",
+            body_family="PingFang SC",
             title_size=48,
             body_size=24,
         ),
-        layout=StyleLayoutConfig(
-            slide_width=1920,
-            slide_height=1080,
-            margin=60,
+        layout=LayoutConfig(
+            density="comfortable",
+            notes_area=True,
+            alignment="left",
+            header_rule=True,
+            border_radius="0px",
+            box_shadow="none",
         ),
         imagery=ImageryConfig(
-            style="photo",
-            color_tone="neutral",
+            image_style="photo",
+            icon_style="outline",
+            chart_preference=[],
         ),
     )
 
@@ -320,28 +363,36 @@ def create_mock_style_config() -> StyleConfig:
 def create_mock_teaching_request() -> TeachingRequest:
     """创建模拟的教学需求"""
     from app.common.schemas import (
-        KnowledgePointDetail,
-        TeachingObjectivesDetail,
+        SubjectInfo,
+        TeachingScenarioDetail,
+        TeachingObjectivesStructured,
         SlideRequirementsDetail,
-        SpecialRequirementsDetail,
-        CasesDetail,
-        ExercisesDetail,
-        InteractionDetail,
-        WarningsDetail,
+        SpecialRequirementsDetailed,
+        CaseRequirement,
+        ExerciseRequirement,
+        InteractionRequirement,
+        WarningRequirement,
     )
-    
+
     return TeachingRequest(
-        user_input_text="液压系统工作原理",
-        teaching_scenario="practice",
-        professional_category="机械制造",
+        subject_info=SubjectInfo(
+            subject_name="液压系统工作原理",
+            subject_category="engineering",
+            sub_field="机械制造",
+        ),
         knowledge_points=[
             KnowledgePointDetail(
+                id="kp1",
                 name="液压系统工作原理",
-                type="concept",
+                type="theory",
                 difficulty_level="medium",
             ),
         ],
-        teaching_objectives=TeachingObjectivesDetail(
+        teaching_scenario=TeachingScenarioDetail(
+            scene_type="practice",
+            scene_label="实操演练",
+        ),
+        teaching_objectives=TeachingObjectivesStructured(
             knowledge=["掌握液压系统的基本组成和工作原理"],
             ability=["能够识别液压系统的主要部件"],
             literacy=["培养安全操作意识和规范操作习惯"],
@@ -352,62 +403,69 @@ def create_mock_teaching_request() -> TeachingRequest:
             max_count=10,
             lesson_duration_min=45,
         ),
-        special_requirements=SpecialRequirementsDetail(
-            cases=CasesDetail(enabled=False, count=0),
-            exercises=ExercisesDetail(enabled=False, total_count=0),
-            interaction=InteractionDetail(enabled=False, types=[]),
-            warnings=WarningsDetail(enabled=True),
+        special_requirements=SpecialRequirementsDetailed(
+            cases=CaseRequirement(enabled=False, count=0),
+            exercises=ExerciseRequirement(enabled=False, total_count=0),
+            interaction=InteractionRequirement(enabled=False, types=[]),
+            warnings=WarningRequirement(enabled=True),
         ),
     )
 
 
-def test_render():
+import pytest
+import asyncio
+
+
+@pytest.mark.asyncio
+async def test_render():
     """测试渲染流程"""
     print("=" * 60)
     print("开始测试 3.5 模块 HTML 渲染")
     print("=" * 60)
-    
+
     # 创建模拟数据
     print("\n1. 创建模拟数据...")
     deck_content = create_mock_slide_deck()
     style_config = create_mock_style_config()
     teaching_request = create_mock_teaching_request()
-    
+
     print(f"   - 页面数量: {len(deck_content.pages)}")
     print(f"   - 风格主题: {style_config.style_name}")
-    print(f"   - 教学场景: {teaching_request.teaching_scene}")
-    
+    print(f"   - 教学场景: {teaching_request.teaching_scenario.scene_type}")
+
     # 渲染 HTML
     print("\n2. 渲染 HTML...")
     output_dir = Path(__file__).parents[3] / "data" / "outputs"
-    
-    result = render_html_slides(
+
+    result = await render_html_slides(
         deck_content=deck_content,
         style_config=style_config,
         teaching_request=teaching_request,
         session_id="test_render_001",
         output_dir=str(output_dir),
     )
-    
+
     print(f"   ✓ HTML 文件: {result.html_path}")
     print(f"   ✓ 总页数: {result.total_pages}")
     print(f"   ✓ 图片插槽数: {len(result.image_slots)}")
-    
+
     # 显示布局使用统计
     print("\n3. 布局使用统计:")
     for layout_id, count in result.layouts_used.items():
         print(f"   - {layout_id}: {count} 页")
-    
+
     # 显示图片插槽信息
     print(f"\n4. 图片插槽详情 ({len(result.image_slots)} 个):")
     for slot in result.image_slots[:5]:  # 只显示前 5 个
         print(f"   - {slot.slot_id}: {slot.theme}")
         print(f"     关键词: {', '.join(slot.keywords)}")
-        print(f"     风格: {slot.visual_style.value}, 宽高比: {slot.aspect_ratio.value}")
-    
+        print(
+            f"     风格: {slot.visual_style.value}, 宽高比: {slot.aspect_ratio.value}"
+        )
+
     if len(result.image_slots) > 5:
         print(f"   ... 还有 {len(result.image_slots) - 5} 个插槽")
-    
+
     # 显示警告
     if result.warnings:
         print(f"\n5. 警告信息 ({len(result.warnings)} 条):")
@@ -415,14 +473,14 @@ def test_render():
             print(f"   ⚠️  {warning}")
     else:
         print("\n5. ✓ 无警告")
-    
+
     print("\n" + "=" * 60)
     print("测试完成!")
     print("=" * 60)
     print(f"\n请在浏览器中打开: {result.html_path}")
-    
+
     return result
 
 
 if __name__ == "__main__":
-    test_render()
+    asyncio.run(test_render())
