@@ -45,8 +45,9 @@ def test_api_connection():
         return False
     
     # 3. 测试 API 调用
+    image_model = os.getenv("DASHSCOPE_IMAGE_MODEL", "qwen-image-plus")
     print("\n📤 发送测试请求...")
-    print(f"   模型: qwen-image-plus")
+    print(f"   模型: {image_model}")
     print(f"   提示词: '一个红色的苹果，白色背景，简洁风格'")
     print(f"   尺寸: 512*512")
     
@@ -55,7 +56,7 @@ def test_api_connection():
         
         response = ImageSynthesis.call(
             api_key=api_key,
-            model="qwen-image-plus",
+            model=image_model,
             prompt="一个红色的苹果，白色背景，简洁风格",
             n=1,
             size="512*512"

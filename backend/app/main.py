@@ -2589,7 +2589,7 @@ async def run_single_image_task(
             image_path=image_path,
             error=None if image_path else "Generation failed",
             generated_at=datetime.utcnow(),
-            model_used="qwen-image-max",
+            model_used=os.getenv("DASHSCOPE_IMAGE_MODEL", "qwen-image-plus"),
             generation_time_seconds=0,
         )
 

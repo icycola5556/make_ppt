@@ -102,7 +102,7 @@ class ImageSlotResult(BaseModel):
     image_path: Optional[str] = None
     error: Optional[str] = None
     generated_at: Optional[datetime] = None
-    model_used: str = "qwen-image-max"
+    model_used: str = ""  # Will be set at runtime from DASHSCOPE_IMAGE_MODEL
     generation_time_seconds: Optional[float] = None
     cache_hit: bool = False
 
