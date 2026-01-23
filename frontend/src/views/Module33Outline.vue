@@ -352,9 +352,23 @@
       <!-- 2-Stage Workflow Entry -->
       <div class="workflow-entry">
         <div class="workflow-hint">✨ 想要编辑大纲或生成详细内容？</div>
-        <button class="primary workflow-btn" @click="goToOutlineEditor">
-          📋 进入大纲编辑器
+        <button
+          class="primary workflow-btn"
+          @click="goToOutlineEditor"
+          :disabled="!isOutlineFullyGenerated || busy"
+          :class="{ 'opacity-50 cursor-not-allowed': !isOutlineFullyGenerated || busy }"
+        >
+          <span v-if="busy || outlineGenerator.isExpanding.value">
+            <i class="fas fa-spinner fa-spin"></i> 生成中...
+          </span>
+          <span v-else>
+            📋 进入大纲编辑器
+          </span>
         </button>
+
+        <p v-if="!isOutlineFullyGenerated && outline" class="text-sm text-orange-500 mt-2">
+          ⚠️ {{ incompletenessReason }}
+        </p>
       </div>
     </section>
   </div>
@@ -435,6 +449,77 @@ const testCaseList = testCases
 const rawText = ref('')
 const skipStyle = ref(false)
 const styleName = ref('theory_clean')
+
+// ✅ 1. 添加完整性检查逻辑
+const isOutlineFullyGenerated = computed(() => {
+  if (!outline.value) return false
+
+  // 检查是否正在扩展
+  if (outlineGenerator.isExpanding.value) return false
+
+  // 检查是否有失败的 slide
+  const slideStatusValues = Object.values(outlineGenerator.slideStatus)
+  const hasErrors = slideStatusValues.some(status => status === 'error')
+  if (hasErrors) return false
+
+  // 🔍 调试：检查是否所有 slide 都已完成扩展
+  // 如果 slideStatus 不为空，确保所有 slide 都是 'done' 状态
+  if (slideStatusValues.length > 0) {
+    const allDone = slideStatusValues.every(status => status === 'done')
+    if (!allDone) {
+      console.log('🔍 Debug: Not all slides are done', outlineGenerator.slideStatus)
+      return false
+    }
+  }
+
+  // 检查基本完整性 (每个slide都有bullets，但某些类型可以没有)
+  // 允许没有bullets的页面类型：cover, title, qa, reference
+  const allowedEmptyTypes = ['cover', 'title', 'qa', 'reference']
+  const hasEmptySlides = outline.value.slides.some(
+    slide => {
+      const slideType = (slide.slide_type || '').toLowerCase()
+      const isAllowedEmpty = allowedEmptyTypes.includes(slideType)
+      return !isAllowedEmpty && (!slide.bullets || slide.bullets.length === 0)
+    }
+  )
+  if (hasEmptySlides) {
+    console.log('🔍 Debug: Has empty slides', outline.value.slides.filter(s => {
+      const slideType = (s.slide_type || '').toLowerCase()
+      const isAllowedEmpty = allowedEmptyTypes.includes(slideType)
+      return !isAllowedEmpty && (!s.bullets || s.bullets.length === 0)
+    }))
+    return false
+  }
+
+  return true
+})
+
+// ✅ 2. 添加未完成原因提示 (用于 UI 显示)
+const incompletenessReason = computed(() => {
+  if (!outline.value) return "等待大纲生成..."
+  if (outlineGenerator.isExpanding.value) return "正在智能扩展章节详情..."
+
+  const slideStatusValues = Object.values(outlineGenerator.slideStatus)
+  const errorCount = slideStatusValues.filter(s => s === 'error').length
+  if (errorCount > 0) return `${errorCount} 个页面生成失败，请重试`
+
+  // 检查是否有未完成的 slide
+  const notDoneCount = slideStatusValues.filter(s => s !== 'done').length
+  if (notDoneCount > 0) {
+    return `还有 ${notDoneCount} 个页面未完成扩展...`
+  }
+
+  // 检查是否有空的 bullets
+  const allowedEmptyTypes = ['cover', 'title', 'qa', 'reference']
+  const emptyCount = outline.value.slides.filter(slide => {
+    const slideType = (slide.slide_type || '').toLowerCase()
+    const isAllowedEmpty = allowedEmptyTypes.includes(slideType)
+    return !isAllowedEmpty && (!slide.bullets || slide.bullets.length === 0)
+  }).length
+  if (emptyCount > 0) return `还有 ${emptyCount} 个页面内容为空...`
+
+  return "正在同步数据..."
+})
 
 
 async function runOutline() {
@@ -619,6 +704,40 @@ onMounted(async () => {
     console.error('Failed to load slide types:', e)
     // 降级到硬编码的映射
     slideTypesData.value = { slide_types: [] }
+  }
+
+  // ✅ 新增：检查并恢复缓存的大纲数据
+  if (sessionId.value) {
+    try {
+      const session = await api.getSession(sessionId.value)
+
+      // 检查是否有缓存的 Outline
+      if (session && session.outline && session.outline.slides && session.outline.slides.length > 0) {
+        console.log('🔄 检测到 3.3 大纲缓存，正在恢复...', session.outline.slides.length, '页')
+
+        // 恢复大纲数据
+        outline.value = session.outline
+
+        // 恢复其他依赖的状态
+        if (session.teaching_request) {
+          teachingRequest.value = session.teaching_request
+        }
+        if (session.style_config) {
+          styleConfig.value = session.style_config
+        }
+
+        // 初始化 outlineGenerator 的状态（标记所有 slide 为已完成）
+        outlineGenerator.initForStructure(outline.value.slides, sessionId.value)
+        // 将所有 slide 标记为 'done'
+        outline.value.slides.forEach((_, index) => {
+          outlineGenerator.slideStatus[index] = 'done'
+        })
+
+        console.log('✅ 3.3 大纲缓存恢复完成')
+      }
+    } catch (e) {
+      console.warn('恢复 3.3 缓存失败:', e)
+    }
   }
 })
 
@@ -1307,5 +1426,36 @@ function goToOutlineEditor() {
   background: #4f46e5;
   transform: translateY(-2px);
   box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+}
+
+.workflow-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #9ca3af;
+}
+
+.workflow-btn:disabled:hover {
+  transform: none;
+  box-shadow: 0 4px 6px -1px rgba(156, 163, 175, 0.4);
+}
+
+.opacity-50 {
+  opacity: 0.5;
+}
+
+.cursor-not-allowed {
+  cursor: not-allowed;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+}
+
+.text-orange-500 {
+  color: #f97316;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
 }
 </style>

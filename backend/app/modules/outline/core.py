@@ -1388,12 +1388,23 @@ async def generate_outline_structure(
     }}
     """
     
+    # ✅ 显式传递约束条件（关键修复）
     user_payload = {
         "subject": req.subject,
         "scene": req.teaching_scene,
         "kps": req.kp_names,
         "objectives": req.teaching_objectives.knowledge,
-        "target_count": req.slide_requirements.target_count
+        "target_count": req.slide_requirements.target_count,
+        # ✅ 新增约束参数
+        "constraints": {
+            "case_count": req.special_requirements.cases.count if req.special_requirements.cases.enabled else 0,
+            "exercise_count": req.special_requirements.exercises.total_count if req.special_requirements.exercises.enabled else 0,
+            "ideological": {
+                "enabled": req.special_requirements.ideological_education.enabled,
+                "focus_points": req.special_requirements.ideological_education.focus_points,
+                "integration_method": req.special_requirements.ideological_education.integration_method
+            }
+        }
     }
     user_msg = json.dumps(user_payload, ensure_ascii=False)
     
@@ -1447,12 +1458,37 @@ async def generate_outline_structure(
         
         # Adjust count to match target (important for user-specified page counts)
         outline = _adjust_outline_to_target_count(outline, req.slide_requirements.target_count)
-        
+
         # 后处理assets：生成描述、补充size/style字段
         outline = await _post_process_outline_assets(outline, req, llm, logger, session_id)
-        
+
+        # ✅ 验证约束条件
+        from .validation import validate_outline_constraints, auto_correct_outline
+        is_valid, validation_warnings = validate_outline_constraints(outline, req)
+
+        if not is_valid:
+            logger.emit(session_id, "3.3", "outline_validation_failed", {
+                "warnings": validation_warnings,
+                "action": "attempting_correction"
+            })
+
+            # 尝试自动修正
+            outline = auto_correct_outline(outline, req, logger, session_id)
+
+            # 再次验证
+            is_valid, new_warnings = validate_outline_constraints(outline, req)
+            if not is_valid:
+                logger.emit(session_id, "3.3", "outline_validation_still_failed", {
+                    "warnings": new_warnings
+                })
+        else:
+            if validation_warnings:
+                logger.emit(session_id, "3.3", "outline_validation_warnings", {
+                    "warnings": validation_warnings
+                })
+
         return outline
-        
+
     except Exception as e:
         logger.emit(session_id, "3.3", "structure_error", {"error": str(e)})
         return generate_outline(req, style_name)

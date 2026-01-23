@@ -1320,43 +1320,49 @@ class WorkflowEngine:
             state.stage = "3.4"
             self.store.save(state)
 
-        # --- Stage 3.5 ---
-        if state.render_result is None:
-            from ..modules.render import render_html_slides
-            from ..modules.render.services import ImageService
+            # ✅ 关键修改：添加断点检查
+            # 如果用户指定停在 3.4 (生成内容但不渲染)，则直接返回
+            if stop_at == "3.4":
+                return state, "ok", []
 
-            # 渲染HTML幻灯片
-            render_result = await render_html_slides(
-                deck_content=state.deck_content,
-                style_config=state.style_config,
-                teaching_request=state.teaching_request,
-                session_id=session_id,
-                output_dir=f"outputs/{session_id}",
-                llm=self.llm,
-            )
-
-            state.render_result = render_result
-
-            # 初始化图片生成器（用于后续API调用）
-            api_key = os.getenv("DASHSCOPE_API_KEY")
-            if api_key:
-                state.image_filler = ImageService(
-                    api_key=api_key, cache_dir=f"outputs/{session_id}/images_cache"
+            # --- Stage 3.5: 自动渲染 (Auto Render) ---
+            # 只要有了 deck_content，就自动进行渲染，生成 HTML 骨架
+            if state.render_result is None or state.stage == "3.4":
+                from ..modules.render import render_html_slides
+                from ..modules.render.services import ImageService
+    
+                # 1. 执行 HTML 渲染 (极速，约 0.5s)
+                output_dir = f"outputs/{session_id}"
+                render_result = await render_html_slides(
+                    deck_content=state.deck_content,
+                    style_config=state.style_config,
+                    teaching_request=state.teaching_request,
+                    session_id=session_id,
+                    output_dir=output_dir,
+                    llm=self.llm,
                 )
-
-            state.stage = "3.5"
-            self.store.save(state)
-
-            self.logger.emit(
-                session_id,
-                "3.5",
-                "render_complete",
-                {
-                    "html_path": render_result.html_path,
-                    "total_pages": render_result.total_pages,
-                    "total_image_slots": len(render_result.image_slots),
-                },
-            )
+    
+                state.render_result = render_result
+    
+                # 2. 初始化图片服务 (为后续前端点击"生成图片"做准备)
+                api_key = os.getenv("DASHSCOPE_API_KEY")
+                if api_key:
+                    state.image_filler = ImageService(
+                        api_key=api_key, cache_dir=f"{output_dir}/images_cache"
+                    )
+    
+                state.stage = "3.5"
+                self.store.save(state)
+    
+                self.logger.emit(
+                    session_id,
+                    "3.5",
+                    "render_complete",
+                    {
+                        "html_path": render_result.html_path,
+                        "image_slots_count": len(render_result.image_slots),
+                    },
+                )
 
         return state, "ok", []
 

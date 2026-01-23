@@ -61,27 +61,83 @@ class LayoutEngine:
 
     @staticmethod
     def _generate_image_slots(page: SlidePage, layout_id: str, page_index: int) -> List[ImageSlotRequest]:
-        """生成并去重图片插槽"""
+        """
+        根据布局生成图片插槽 (Content Adapter 增强版)
+        
+        核心逻辑:
+        1. 精准映射: 将 3.4 模块的 SlideElement (图片/图表) 与布局插槽 1对1 映射
+        2. 利用描述: 优先使用 3.4 提供的 description 作为生图 Prompt
+        3. 忽略尺寸: 强制使用 Layout 定义的宽高比，防止版面错乱
+        """
         layout_config = VOCATIONAL_LAYOUTS.get(layout_id)
         if not layout_config or not layout_config.image_slots:
             return []
 
-        # 1. 生成原始插槽
+        # 1. 提取页面中的所有视觉元素 (3.4 输出的内容)
+        content_visuals = [
+            e for e in page.elements 
+            if e.type in ["image", "diagram", "chart", "shape", "illustration"]
+        ]
+
         slots = []
         for i, slot_def in enumerate(layout_config.image_slots):
-            theme = LayoutEngine._extract_theme_from_page(page, slot_def)
-            keywords = LayoutEngine._extract_keywords(page.title, theme)
-            context = LayoutEngine._build_context(page)
+            # === 核心映射逻辑 ===
+            # 尝试获取对应的 3.4 内容元素 (按顺序匹配: 第1个插槽匹配第1个图片元素...)
+            content_elem = content_visuals[i] if i < len(content_visuals) else None
+
+            # 1. 初始化默认值
+            theme = page.title
+            context = f"{page.title} 相关配图"
+            keywords = [page.title]  # 默认兜底
+
+            # 2. 智能映射逻辑
+            if content_elem and isinstance(content_elem.content, dict):
+                c = content_elem.content
+
+                # 分支 A: 优先使用 3.4 生成的高质量 description
+                if c.get("description"):
+                    context = c.get("description")
+                    theme = c.get("theme") or context[:15]
+                    # 这里的 keywords 可以直接硬编码一些高质量词，或者留给后面统一提取
+                    keywords = [page.title, "高清", "专业"]
+
+                # 分支 B: 使用 visual_suggestions (兼容旧数据)
+                elif c.get("visual_suggestions"):
+                    context = c.get("visual_suggestions")[0] if isinstance(c.get("visual_suggestions"), list) else str(c.get("visual_suggestions"))
+                    theme = c.get("theme") or page.title
+                    # 注意：这里我们暂时不设置 keywords，留给后面统一提取
+
+                # 分支 C: 仅有 theme
+                elif c.get("theme"):
+                    theme = c.get("theme")
+                    context = f"{page.title} - {theme}"
+
+            else:
+                # Fallback
+                context = LayoutEngine._build_context(page)
+
+            # ✅ 3. [统一补全] 关键词提取逻辑 (选项 B)
+            # 如果 keywords 还是默认的单标题，或者为空，则尝试从丰富的 context 中提取
+            if not keywords or keywords == [page.title]:
+                # 只有当 context 确实比 title 长时才提取，避免重复
+                if len(context) > len(page.title):
+                    keywords = LayoutEngine._extract_keywords(page.title, context)
+
+            # C. 视觉风格 (优先 Layout 定义，其次 Slide Type)
             vis_style = LayoutEngine._infer_visual_style(page.slide_type, slot_def)
             
+            # D. 强制约束：宽高比必须听 Layout 的 (忽略 3.4 的 size 建议)
+            # 例如：就算 3.4 说要 16:9，但如果是 grid_4 布局，必须强制 4:3
+            layout_ratio = AspectRatio(slot_def.get("aspect_ratio", "4:3"))
+
             slot = ImageSlotRequest(
                 slot_id=f"page{page_index}_slot{i}",
                 page_index=page_index,
                 theme=theme,
                 keywords=keywords,
-                context=context,
+                context=context, # 关键：这里现在是 3.4 的高质量描述
                 visual_style=vis_style,
-                aspect_ratio=AspectRatio(slot_def.get("aspect_ratio", "4:3")),
+                aspect_ratio=layout_ratio, # 关键：强制约束
                 layout_position=slot_def["position"],
                 x=slot_def["x"],
                 y=slot_def["y"],
@@ -92,12 +148,12 @@ class LayoutEngine:
             slots.append(slot)
 
         # 2. 去重逻辑 (防止四宫格生成重复图片)
-        seen_prompts = set()
-        fallback_bullets = []
+        seen_prompts: set = set()
+        fallback_bullets: List[str] = []
         for elem in page.elements:
             if elem.type == "bullets" and isinstance(elem.content, dict):
                 items = elem.content.get("items", [])
-                fallback_bullets.extend([str(i) for i in items])
+                fallback_bullets.extend([str(item) for item in items])
         
         for i, slot in enumerate(slots):
             current_prompt = slot.context or slot.theme or (page.title if page.title else "")
@@ -113,7 +169,7 @@ class LayoutEngine:
                 new_prompt = f"{page.title} 特写: {clean_bullet}"
                 slot.context = new_prompt
                 slot.theme = f"{page.title} - {clean_bullet[:15]}..."
-                slot.keywords = [page.title, "特写", clean_bullet[:5]]
+                slot.keywords = [page.title or "", "特写", clean_bullet[:5]]
                 
                 seen_prompts.add(new_prompt)
             else:

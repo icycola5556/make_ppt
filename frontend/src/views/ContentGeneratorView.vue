@@ -1,6 +1,5 @@
 <template>
   <div class="content-generator-page">
-    <!-- Header -->
     <header class="generator-header">
       <div class="header-left">
         <button class="back-btn" @click="goBack">← 返回大纲</button>
@@ -25,7 +24,6 @@
       </div>
     </header>
 
-    <!-- Progress Bar -->
     <div class="progress-section">
       <div class="progress-info">
         <span class="progress-text">
@@ -41,7 +39,6 @@
       </div>
     </div>
 
-    <!-- Card Grid -->
     <div class="card-grid-container">
       <div class="card-grid">
         <ContentCard
@@ -58,7 +55,6 @@
       </div>
     </div>
 
-    <!-- Toast Container -->
     <div class="toast-container">
       <div 
         v-for="toast in contentGenerator.toasts.value" 
@@ -87,51 +83,55 @@ const contentGenerator = useContentGenerator()
 
 const isRendering = ref(false)
 
-    const startRender = async () => {
-      if (!workflow.sessionId.value) return
-      
-      isRendering.value = true
-      try {
-        // 1. 准备数据：只提取每页的 index, script, bullets
-        // 这些是前端生成或编辑过的核心内容
-        const slidesList = slides.value || []
-        const assembleData = slidesList.map((slide, idx) => {
-            const generated = contentGenerator.generatedContent[idx] || {}
-            return {
-                index: idx,
-                script: generated.script || '',
-                // 优先使用生成的内容，如果没有则回退到大纲内容
-                bullets: generated.bullets && generated.bullets.length > 0 
-                         ? generated.bullets 
-                         : (slide.bullets || [])
-            }
+// ✅ 修复后的 startRender：先同步数据，再跳转
+const startRender = async () => {
+  if (!workflow.sessionId.value) return
+  
+  isRendering.value = true
+  try {
+    // 1. 提取已生成的内容
+    const updates = []
+    const totalSlides = slides.value.length
+    
+    for (let i = 0; i < totalSlides; i++) {
+      const gen = contentGenerator.generatedContent[i]
+      if (gen) {
+        updates.push({
+          index: i,
+          script: gen.script || '',
+          bullets: gen.bullets || []
         })
-        
-        console.log("正在请求后端组装 PPT...", assembleData.length, "页")
-        
-        // 2. 调用组装接口 (替代原来的 updateDeck)
-        await api.assembleDeck(workflow.sessionId.value, assembleData)
-
-        // 3. 成功后跳转，触发自动渲染
-        await router.push({
-          name: 'Module3.5', 
-          query: { 
-            session_id: workflow.sessionId.value,
-            auto_run: 'true' 
-          }
-        })
-        
-      } catch (err) {
-        console.error('Assembly failed:', err)
-        // 使用 toast 显示更友好的错误
-        if (contentGenerator.addToast) {
-            contentGenerator.addToast('生成失败: ' + err.message, 'error')
-        } else {
-            alert('生成失败: ' + err.message)
-        }
-        isRendering.value = false
       }
     }
+    
+    // 2. 同步到后端
+    if (updates.length > 0) {
+      console.log(`正在同步 ${updates.length} 页内容到后端...`)
+      await api.updateSlidesBatch(workflow.sessionId.value, updates)
+    } else {
+      console.warn("没有生成任何内容，将使用默认骨架")
+    }
+
+    // 3. 保存成功后跳转
+    await router.push({
+      name: 'Module3.5', 
+      query: { 
+        session_id: workflow.sessionId.value,
+        auto_run: 'true' 
+      }
+    })
+    
+  } catch (err) {
+    console.error('Save/Navigation failed:', err)
+    // 如果有 toast 机制则显示
+    if (contentGenerator.addToast) {
+        contentGenerator.addToast('同步数据失败: ' + err.message, 'error')
+    } else {
+        alert('同步数据失败，请重试')
+    }
+    isRendering.value = false
+  }
+}
 
 // Get slides from workflow outline
 const slides = computed(() => {

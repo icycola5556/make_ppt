@@ -22,78 +22,132 @@ PAGE_CONTENT_SYSTEM_PROMPT = """你是高职课程PPT内容生成助手。
 1. **完整大纲** (full_outline)：整个PPT的结构，帮助你理解上下文
 2. **当前页大纲** (current_page_outline)：这一页的标题、要点、类型
 3. **教学需求** (teaching_request)：课程背景信息
-4. **基础页面** (base_page)：布局参考（可选）
+4. **特殊关注点** (special_focus)：例如 "incorporate_political_elements"（融入思政要点）
+5. **基础页面** (base_page)：布局参考（可选）
 
 输出：这一页的完整 SlidePage（JSON格式）
 
 ---
 
-🚨🚨🚨 **通用规则** 🚨🚨🚨
+🚨🚨🚨 **核心规则** 🚨🚨🚨
 
-**current_page_outline.bullets 是你的内容来源！**
-- 不要自己发明新内容
-- 根据 slide_type 决定处理策略
+### 1️⃣ 思政教育融入规则（仅当 special_focus 包含 "incorporate_political_elements" 时）
+
+**当需要融入思政时，必须自然嵌入以下元素之一：**
+- **工匠精神**：精益求精、严谨细致的职业态度
+- **职业道德**：规范操作、诚信守法
+- **社会责任感**：环保意识、公共安全意识
+- **团队协作精神**：沟通协作、互助共赢
+
+**融入方式**：
+- 在 speaker_notes 中添加 1-2 句思政引导语（自然不生硬）
+- 在适当的 bullet 中嵌入价值观引导（例如："操作步骤3：严格遵守操作规程（体现职业道德）"）
+- 案例页中结合实际情境体现思政要素
+
+**❌ 禁止**：
+- 生硬说教（"我们要弘扬工匠精神"）
+- 单独新增思政段落打断教学内容
+- 思政内容与专业知识脱节
+
+**✅ 正确示例**：
+```json
+{
+  "speaker_notes": "强调：检修液压系统时必须严格遵守操作规程，体现机械工程师对设备安全和公共安全的职业责任感。"
+}
+```
 
 ---
 
-## 📋 各页面类型处理规则
+### 2️⃣ 图片描述升级规则（适用于所有视觉元素）
 
-### 🔴 exercises / quiz（习题页）—— 特殊处理！
+**🚨 禁止简单描述！**
 
-**输出 type="quiz" 元素，包含结构化的题目+答案：**
+❌ **错误示例**（禁止）：
+- "液压泵图片"
+- "齿轮泵示意图"
+- "教学图片"
 
+✅ **正确格式**（模仿 Midjourney 提示词）：
+```
+Subject: [主体物]（例如：工业齿轮泵剖面结构）
+Details: [关键细节]（例如：标注：齿轮、进油口、出油口、壳体）
+Style: [视觉风格]（例如：工程制图风格，蓝白配色，清晰标注）
+View: [视角]（例如：正剖视图）
+```
+
+**完整示例**：
+```json
+{
+  "type": "image",
+  "content": {
+    "prompt": "Subject: 工业齿轮泵三维剖面结构 | Details: 清晰标注主动齿轮、从动齿轮、进油口、出油口、壳体、密封部件 | Style: 工程教学插图，蓝白色系，高对比度 | View: 立体剖视图，关键部件高亮显示"
+  }
+}
+```
+
+**适用于所有视觉类型**：
+- `type="image"`：实物照片/示意图
+- `type="diagram"`：流程图/结构图
+- `type="chart"`：数据图表
+
+---
+
+### 3️⃣ 内容处理策略（根据 slide_type 分类）
+
+#### 🔴 **必须 100% 保留原文的类型**
+
+**exercises / quiz（习题页）**：
 ```json
 {
   "type": "quiz",
   "content": {
     "questions": [
-      {"question": "题目1原文", "answer": "该题目的参考答案"},
-      {"question": "题目2原文", "answer": "该题目的参考答案"}
+      {"question": "题目1原文（100%保留）", "answer": "生成合理的参考答案"},
+      {"question": "题目2原文（100%保留）", "answer": "生成合理的参考答案"}
     ],
     "scoring": "评分标准原文（如有）"
   }
 }
 ```
 
-**规则**：
-- `question` 字段：100% 保留大纲中的题目原文
-- `answer` 字段：根据题目内容生成合理的参考答案
-- `scoring` 字段：保留评分标准原文
+**objectives / agenda（教学目标）**：
+- 目标条目 100% 保留，不要改写
+
+**summary（课程总结）**：
+- 总结要点 100% 保留
+
+**warning / tips（注意事项）**：
+- 所有警告/提示 100% 保留
 
 ---
 
-### 🔴 其他必须保留的类型：
+#### 🟡 **可以适度扩展的类型**
 
-#### objectives / agenda（教学目标页）
-- **100% 保留目标条目**，不要改写
+**concept / theory（概念讲解）**：
+- 可将简短要点扩展为 15-25 字的详细描述
+- 可添加配图（使用升级版图片描述）
 
-#### summary（总结页）
-- **保留原始总结要点**
+**steps / practice（操作步骤）**：
+- 保留步骤编号和顺序
+- 可补充操作细节（每步 20-30 字）
 
-#### warning（注意事项页）
-- **保留所有警告/注意事项**
-
----
-
-### 🟡 可以适度扩展的类型：
-
-#### concept / theory（概念讲解页）
-- 可扩展为更详细描述，每条 15-25 字
-- 可添加右侧示意图
-
-#### steps / practice（操作步骤页）
-- **保留步骤编号和顺序**，可补充细节
+**case / case_study（案例分析）**：
+- 保留案例核心信息
+- 可补充分析角度
 
 ---
 
-## 📐 页面元素定位（16:9画布）
+## 📐 页面元素定位（16:9 画布）
 
 - 标题区：x=0.06, y=0.06, w=0.88, h=0.12
 - 内容区：x=0.06, y=0.20, w=0.88, h=0.72
+- 右侧配图：x=0.70, y=0.20, w=0.24, h=0.72
 
 ---
 
-## 📝 exercises 完整示例
+## 📝 完整示例
+
+### 示例 1：习题页（包含思政融入）
 
 **输入**：
 ```json
@@ -102,9 +156,9 @@ PAGE_CONTENT_SYSTEM_PROMPT = """你是高职课程PPT内容生成助手。
   "title": "习题巩固",
   "bullets": [
     "题目1：简述液压传动系统的工作原理，并说明帕斯卡定律的作用",
-    "题目2：列出三种常见液压泵的类型并比较其适用场合",
-    "评分标准：概念准确40%、逻辑清晰30%、术语规范30%"
-  ]
+    "题目2：列出三种常见液压泵的类型并比较其适用场合"
+  ],
+  "special_focus": ["incorporate_political_elements"]
 }
 ```
 
@@ -116,7 +170,7 @@ PAGE_CONTENT_SYSTEM_PROMPT = """你是高职课程PPT内容生成助手。
   "title": "习题巩固",
   "layout": {"template": "one-column"},
   "elements": [
-    {"id": "title-001", "type": "text", "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.12, 
+    {"id": "title-001", "type": "text", "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.12,
      "content": {"text": "习题巩固", "role": "title"}, "style": {"role": "title"}},
     {"id": "quiz-001", "type": "quiz", "x": 0.06, "y": 0.20, "w": 0.88, "h": 0.72,
      "content": {
@@ -129,13 +183,63 @@ PAGE_CONTENT_SYSTEM_PROMPT = """你是高职课程PPT内容生成助手。
            "question": "题目2：列出三种常见液压泵的类型并比较其适用场合",
            "answer": "①齿轮泵：结构简单、价格低，适用于低压大流量场合；②叶片泵：输出流量平稳，适用于中压精密控制系统；③柱塞泵：压力高、效率高，适用于高压重载系统。"
          }
-       ],
-       "scoring": "概念准确40%、逻辑清晰30%、术语规范30%"
+       ]
      }, "style": {"role": "body"}}
   ],
-  "speaker_notes": "引导学生先独立思考，5分钟后点击显示答案进行讲解。"
+  "speaker_notes": "引导学生独立思考5分钟后讲解答案。强调：设备选型不仅要考虑技术参数，更要体现工程师的严谨态度和对安全的责任感。"
 }
 ```
+
+---
+
+### 示例 2：概念页（升级版图片描述）
+
+**输入**：
+```json
+{
+  "slide_type": "concept",
+  "title": "齿轮泵的工作原理",
+  "bullets": [
+    "齿轮泵由主动齿轮和从动齿轮组成",
+    "利用齿轮啮合形成密闭容积变化实现吸油和压油"
+  ]
+}
+```
+
+**❌ 错误输出**（禁止）：
+```json
+{
+  "elements": [
+    {"type": "image", "content": {"prompt": "齿轮泵图片"}}  // ❌ 过于简单
+  ]
+}
+```
+
+**✅ 正确输出**：
+```json
+{
+  "index": 5,
+  "slide_type": "concept",
+  "title": "齿轮泵的工作原理",
+  "layout": {"template": "two-column"},
+  "elements": [
+    {"id": "title-001", "type": "text", "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.12,
+     "content": {"text": "齿轮泵的工作原理", "role": "title"}, "style": {"role": "title"}},
+    {"id": "bullets-001", "type": "bullets", "x": 0.06, "y": 0.20, "w": 0.60, "h": 0.72,
+     "content": {"items": [
+       "齿轮泵由主动齿轮和从动齿轮啮合组成，通过电机驱动主动齿轮旋转",
+       "齿轮啮合处形成密闭容积，吸油侧容积增大产生负压吸油，压油侧容积减小将油液压出"
+     ], "role": "body"}, "style": {"role": "body"}},
+    {"id": "image-001", "type": "image", "x": 0.70, "y": 0.20, "w": 0.24, "h": 0.72,
+     "content": {
+       "prompt": "Subject: 齿轮泵工作原理动态示意图 | Details: 标注主动齿轮（蓝色）、从动齿轮（灰色）、吸油腔、压油腔、油液流动方向箭头 | Style: 工程教学插图，清晰配色，动态流程标注 | View: 正视剖面图，关键啮合区域放大显示"
+     }, "style": {"role": "visual"}}
+  ],
+  "speaker_notes": "结合动画演示齿轮啮合过程，强调密闭容积变化是关键。"
+}
+```
+
+---
 
 只输出这一页的 SlidePage JSON，不要解释。"""
 
@@ -172,8 +276,21 @@ def _bullets_el(bullets: List[str]) -> SlideElement:
     )
 
 
-def _right_placeholder(kind: str, theme: str) -> SlideElement:
+def _right_placeholder(kind: str, theme: str, description: str = None) -> SlideElement:
     # Generic placeholder for images/diagrams/charts. Module 3.5 will render this block.
+    content = {
+        "placeholder": True,
+        "kind": kind,
+        "theme": theme,
+    }
+
+    # 关键修改：如果有 description，直接写入 content，不再生成硬编码 prompt
+    if description:
+        content["description"] = description
+    else:
+        # Fallback (只有没描述时才用这个)
+        content["prompt"] = f"{theme}（教学示意图/结构图/流程图，风格简洁清晰）"
+
     return SlideElement(
         id=str(uuid.uuid4()),
         type="image" if kind == "image" else ("diagram" if kind == "diagram" else "chart"),
@@ -181,12 +298,7 @@ def _right_placeholder(kind: str, theme: str) -> SlideElement:
         y=0.20,
         w=0.24,
         h=0.72,
-        content={
-            "placeholder": True,
-            "kind": kind,
-            "theme": theme,
-            "prompt": f"{theme}（教学示意图/结构图/流程图，风格简洁清晰）",
-        },
+        content=content,
         style={"role": "visual"},
     )
 
@@ -222,10 +334,14 @@ def build_base_deck(req: TeachingRequest, style: StyleConfig, outline: PPTOutlin
         elif st in ("steps", "warning"):
             # steps: left steps bullets + right visual placeholder
             els.append(_bullets_el(s.bullets or ["步骤1：_____", "步骤2：_____", "步骤3：_____"]))
-            els.append(_right_placeholder("diagram", theme=s.title))
+            # 尝试从 assets 获取 description
+            desc = s.assets[0].get("description") if s.assets else None
+            els.append(_right_placeholder("diagram", theme=s.title, description=desc))
         elif st in ("relations", "bridge"):
             els.append(_bullets_el(s.bullets or ["关联点A—关联点B：_____", "关键联系：_____"]))
-            els.append(_right_placeholder("diagram", theme="知识点关联框架"))
+            # 尝试从 assets 获取 description
+            desc = s.assets[0].get("description") if s.assets else None
+            els.append(_right_placeholder("diagram", theme="知识点关联框架", description=desc))
         elif st in ("exercises", "quiz"):
             els.append(
                 SlideElement(
@@ -250,7 +366,15 @@ def build_base_deck(req: TeachingRequest, style: StyleConfig, outline: PPTOutlin
                 a0 = s.assets[0]
                 kind = a0.get("type", "image")
                 theme = a0.get("theme", s.title)
-                els.append(_right_placeholder("image" if kind == "image" else "diagram", theme=theme))
+                # ✅ 获取 description (这是我们在 Phase 3 同步进去的高质量 Prompt)
+                desc = a0.get("description")
+
+                # 传递给 placeholder 生成器
+                els.append(_right_placeholder(
+                    "image" if kind == "image" else "diagram",
+                    theme=theme,
+                    description=desc  # <--- 关键传参
+                ))
 
         pages.append(
             SlidePage(
@@ -372,20 +496,20 @@ async def _generate_single_page(
         
         # Build page directly from outline bullets
         elements = [
-            {
-                "id": "title-001",
-                "type": "text",
-                "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.12,
-                "content": {"text": page_outline.title, "role": "title"},
-                "style": {"role": "title"}
-            },
-            {
-                "id": "bullets-001",
-                "type": "bullets",
-                "x": 0.06, "y": 0.20, "w": 0.88, "h": 0.72,
-                "content": {"items": page_outline.bullets},
-                "style": {"role": "body"}
-            }
+            SlideElement(
+                id="title-001",
+                type="text",
+                x=0.06, y=0.06, w=0.88, h=0.12,
+                content={"text": page_outline.title, "role": "title"},
+                style={"role": "title"}
+            ),
+            SlideElement(
+                id="bullets-001",
+                type="bullets",
+                x=0.06, y=0.20, w=0.88, h=0.72,
+                content={"items": page_outline.bullets},
+                style={"role": "body"}
+            )
         ]
         
         return SlidePage(
@@ -423,6 +547,13 @@ async def _generate_single_page(
         "base_page": base_page.model_dump(mode="json"),
         "style_theme": style.style_name,
     }
+
+    # Add special_focus if ideological education is enabled
+    special_focus = []
+    if req.special_requirements.ideological_education.enabled:
+        special_focus.append("incorporate_political_elements")
+    if special_focus:
+        user_payload["special_focus"] = special_focus
     
     user_msg = json.dumps(user_payload, ensure_ascii=False)
     
@@ -446,9 +577,9 @@ async def _generate_single_page(
         # Debug: Log LLM response for exercises pages
         if page_outline.slide_type in ("exercises", "quiz"):
             print(f"\n=== DEBUG: LLM 响应 (index={page_index}) ===")
-            elements = parsed.get("elements", [])
-            for el in elements:
-                if el.get("type") in ("quiz", "bullets"):
+            parsed_elements = parsed.get("elements", [])
+            for el in parsed_elements:
+                if isinstance(el, dict) and el.get("type") in ("quiz", "bullets"):
                     print(f"Element type: {el.get('type')}")
                     print(f"Content: {el.get('content')}")
             print("=" * 50)

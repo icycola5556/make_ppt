@@ -41,6 +41,7 @@ ConfirmationType = Literal[
 # --- Sub-models for structured TeachingRequest ---
 
 
+# 学科基本信息，包含名称、专业类别和子领域
 class SubjectInfo(BaseModel):
     subject_name: Optional[str] = None
     subject_category: ProfessionalCategory = "unknown"
@@ -118,12 +119,28 @@ class AnimationRequirement(BaseModel):
     enabled: bool = False
 
 
+class IdeologicalEducation(BaseModel):
+    """思政教育要求"""
+    enabled: bool = False
+    focus_points: List[str] = Field(
+        default_factory=list,
+        description="思政融入点，例如：['职业道德', '工匠精神', '社会责任感']"
+    )
+    integration_method: Literal["embedded", "dedicated_section"] = "embedded"
+
+
 class SpecialRequirementsDetailed(BaseModel):
     cases: CaseRequirement = Field(default_factory=CaseRequirement)
     exercises: ExerciseRequirement = Field(default_factory=ExerciseRequirement)
     interaction: InteractionRequirement = Field(default_factory=InteractionRequirement)
     warnings: WarningRequirement = Field(default_factory=WarningRequirement)
     animations: AnimationRequirement = Field(default_factory=AnimationRequirement)
+
+    # ✅ 新增：思政教育字段
+    ideological_education: IdeologicalEducation = Field(
+        default_factory=IdeologicalEducation,
+        description="课程思政教育要求"
+    )
 
 
 class PageDistribution(BaseModel):
@@ -333,11 +350,23 @@ class FontConfig(BaseModel):
 
 
 class LayoutConfig(BaseModel):
+    # 1. 密度：宽松还是紧凑
+    # 只能选 "compact" 或 "comfortable"，默认为 "comfortable"
     density: Literal["compact", "comfortable"] = "comfortable"
-    notes_area: bool = True
+
+    # 2. 是否留出演讲备注区
+    notes_area: bool = True  # 布尔值：True 或 False
+
+    # 3. 对齐方式
     alignment: Literal["left", "center"] = "left"
+
+    # 4. 是否要有标题下方的分割线
     header_rule: bool = True
-    border_radius: str = "0px"
+
+    # 5. 圆角大小（CSS 字符串）
+    border_radius: str = "0px"  # 比如 "8px"
+
+    # 6. 阴影风格
     box_shadow: Literal["none", "soft", "hard"] = "none"
 
 
@@ -399,20 +428,34 @@ class PPTOutline(BaseModel):
 class SlideElement(BaseModel):
     """Module 3.4 atomic element on a slide (for later web rendering in Module 3.5)."""
 
-    id: str
+    # 1. 唯一身份证
+    id: str  
+    # 这一行意思是：id 必须是字符串(str)。
+
+    # 2. 元素类型（枚举）
     type: Literal[
-        "text", "bullets", "image", "shape", "table", "chart", "diagram", "quiz"
+        #纯文本、要点、图片、形状、表格、图表、示意图（流程图、架构图）、互动
+        "text", "bullets", "image", "shape", "table", "chart", "diagram", "quiz" 
     ] = "text"
 
-    # Relative layout on a 16:9 slide canvas, normalized to [0, 1]
-    x: float = 0.0
-    y: float = 0.0
-    w: float = 1.0
-    h: float = 1.0
+    # 3. 坐标系统（重点！）
+    # 这里的 float 代表浮点数（小数）。
+    # 这是一个归一化坐标系：左上角是(0,0)，右下角是(1,1)。
+    x: float = 0.0  # 横坐标：0.0 代表最左边，0.5 代表中间
+    y: float = 0.0  # 纵坐标：0.0 代表最顶端
+    w: float = 1.0  # 宽度：1.0 代表占满全屏宽
+    h: float = 1.0  # 高度：1.0 代表占满全屏高
 
+    # 4. 内容荷载
     content: Dict[str, Any] = Field(
         default_factory=dict, description="Element payload by type"
     )
+    # Dict[str, Any]：这是一个字典，Key是字符串，Value可以是任何东西。
+    # default_factory=dict：如果不传，默认生成一个空字典 {}。
+    # 比如文本元素：content={"text": "大家好"}
+    # 比如列表元素：content={"items": ["第一点", "第二点"]}
+
+    # 5. 样式覆盖
     style: Dict[str, Any] = Field(
         default_factory=dict, description="Element style overrides"
     )
@@ -421,17 +464,29 @@ class SlideElement(BaseModel):
 class SlidePage(BaseModel):
     """Module 3.4 output per slide: content + layout + placeholders."""
 
-    index: int
-    slide_type: str
+    # 1. 页码
+    index: int  # 必须是整数
+
+    # 2. 类型（如 "cover" 封面, "content" 内容页）
+    slide_type: str 
+
+    # 3. 标题
     title: str
 
+    # 4. 布局信息（注意！）
+    # 这是一个字典，用来告诉前端用哪个模板。
+    # 比如 {"template": "title_bullets_right_img"}
     layout: Dict[str, Any] = Field(
         default_factory=dict, description="Layout template name + parameters"
     )
+
+    # 5. 元素列表（核心！）
+    # List[SlideElement]：这里面只能装 SlideElement 类型的对象
     elements: List[SlideElement] = Field(default_factory=list)
 
+    # 6. 演讲者备注（可选）
+    # Optional[str]：可以是字符串，也可以是 None（空）
     speaker_notes: Optional[str] = None
-
 
 class SlideDeckContent(BaseModel):
     """Module 3.4 output: slide-by-slide page content for the whole deck."""
@@ -471,13 +526,17 @@ class WorkflowRunRequest(BaseModel):
 class WorkflowRunResponse(BaseModel):
     session_id: str
     status: Literal["need_user_input", "ok", "error"]
-    stage: Literal["3.1", "3.2", "3.3", "3.4"]
+    stage: Literal["3.1", "3.2", "3.3", "3.4", "3.5"]
     questions: List[Question] = Field(default_factory=list)
     teaching_request: Optional[TeachingRequest] = None
     style_config: Optional[StyleConfig] = None
     style_samples: List[StyleSampleSlide] = Field(default_factory=list)
     outline: Optional[PPTOutline] = None
     deck_content: Optional[SlideDeckContent] = None
+    render_result: Optional[Dict[str, Any]] = Field(
+        default=None, 
+        description="3.5模块渲染结果 (包含 html_path, image_slots 等)"
+    )
     logs_preview: List[Dict[str, Any]] = Field(default_factory=list)
     message: Optional[str] = None
 

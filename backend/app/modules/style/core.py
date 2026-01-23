@@ -17,10 +17,146 @@ from ...prompts.style import STYLE_REFINE_PROMPT, STYLE_SELECT_OR_DESIGN_PROMPT
 import json
 from typing import Optional
 
-# ... (STYLE_TEMPLATES omitted for brevity, assuming replace_file_content handles boundaries correctly. 
-# Wait, I need to touch imports at top and choose_style at bottom.
-# I will make two edits or use multi_replace if they are far apart.
-# They are far apart (Lines 5 and 188). I will use MultiReplace.)
+
+# === 大师级配色预设 (Premium Themes) ===
+# 这些主题使用弥散光、毛玻璃等高级视觉效果
+PREMIUM_THEMES = {
+    "tech_blue": {
+        "primary": "#2563eb",       # 亮蓝
+        "secondary": "#1e40af",     # 深蓝
+        "accent": "#06b6d4",        # 青色（高光）
+        "background_base": "#0f172a", # 深空蓝黑
+        "surface": "rgba(30, 41, 59, 0.7)", # 半透明卡片
+        "text": "#f8fafc",          # 几乎白
+        "muted": "#94a3b8",         # 灰蓝
+        "warning": "#ef4444",
+        "gradient_type": "mesh"     # 标记：弥散光效果
+    },
+    "minimal_light": {
+        "primary": "#18181b",       # 墨黑
+        "secondary": "#52525b",     # 深灰
+        "accent": "#f43f5e",        # 玫红（点缀）
+        "background_base": "#fafafa", # 暖白
+        "surface": "rgba(255, 255, 255, 0.8)", # 毛玻璃白
+        "text": "#18181b",
+        "muted": "#71717a",
+        "warning": "#ef4444",
+        "gradient_type": "soft_linear"
+    },
+    "nature_green": {
+        "primary": "#059669",
+        "secondary": "#064e3b",
+        "accent": "#fbbf24",        # 琥珀黄
+        "background_base": "#f0fdf4", # 极淡的薄荷绿
+        "surface": "rgba(255, 255, 255, 0.6)",
+        "text": "#064e3b",
+        "muted": "#6b7280",
+        "warning": "#ef4444",
+        "gradient_type": "diagonal"
+    },
+    "warm_sunset": {
+        "primary": "#dc2626",       # 暖红
+        "secondary": "#f97316",     # 橙色
+        "accent": "#fbbf24",        # 金黄
+        "background_base": "#fffbeb", # 暖白
+        "surface": "rgba(255, 251, 235, 0.85)",
+        "text": "#1c1917",
+        "muted": "#78716c",
+        "warning": "#dc2626",
+        "gradient_type": "warm_radial"
+    },
+    "purple_aurora": {
+        "primary": "#7c3aed",       # 紫罗兰
+        "secondary": "#4f46e5",     # 靛蓝
+        "accent": "#ec4899",        # 粉红
+        "background_base": "#0f0f23", # 深夜蓝
+        "surface": "rgba(30, 27, 75, 0.75)",
+        "text": "#f8fafc",
+        "muted": "#a5b4fc",
+        "warning": "#f472b6",
+        "gradient_type": "aurora"
+    }
+}
+
+
+def _generate_background_css(theme_data: dict) -> str:
+    """
+    根据主题类型，生成高级的 CSS 渐变背景
+    这是让 PPT 瞬间变高级的魔法函数
+    """
+    base = theme_data.get("background_base", "#ffffff")
+    g_type = theme_data.get("gradient_type", "flat")
+    primary = theme_data.get("primary", "#3b82f6")
+    secondary = theme_data.get("secondary", "#1e40af")
+    
+    if g_type == "mesh":
+        # 模拟弥散光/极光效果 (Tech感极强)
+        # 逻辑：深色底 + 左上角亮光 + 右下角暗光
+        return f"""
+            background-color: {base};
+            background-image: 
+                radial-gradient(at 0% 0%, {secondary}40 0px, transparent 50%),
+                radial-gradient(at 100% 100%, {primary}30 0px, transparent 50%);
+        """
+        
+    elif g_type == "soft_linear":
+        # 只有一点点灰度的极简渐变 (Apple风)
+        return f"background: linear-gradient(180deg, {base} 0%, #eef2f6 100%);"
+        
+    elif g_type == "diagonal":
+        # 对角线柔和渐变
+        return f"background: linear-gradient(135deg, {base} 0%, {primary}15 100%);"
+    
+    elif g_type == "warm_radial":
+        # 暖色径向渐变（日落感）
+        return f"""
+            background-color: {base};
+            background-image: 
+                radial-gradient(ellipse at top right, {secondary}20 0%, transparent 50%),
+                radial-gradient(ellipse at bottom left, {primary}15 0%, transparent 50%);
+        """
+    
+    elif g_type == "aurora":
+        # 极光效果（科技/梦幻感）
+        accent = theme_data.get("accent", "#ec4899")
+        return f"""
+            background-color: {base};
+            background-image: 
+                radial-gradient(at 10% 20%, {primary}40 0px, transparent 40%),
+                radial-gradient(at 80% 80%, {secondary}35 0px, transparent 40%),
+                radial-gradient(at 50% 50%, {accent}20 0px, transparent 50%);
+        """
+        
+    # 默认：纯色
+    return f"background-color: {base};"
+
+
+def _get_premium_theme_for_category(professional_category: str, teaching_scene: str = "theory") -> dict:
+    """
+    根据专业类别和教学场景，选择最合适的高级主题
+    """
+    # 科技类专业 -> tech_blue
+    tech_categories = ["engineering", "science", "media", "transportation"]
+    # 自然/健康类 -> nature_green
+    nature_categories = ["agriculture", "medical", "water", "food", "resources"]
+    # 艺术/创意类 -> purple_aurora 或 warm_sunset
+    creative_categories = ["arts", "textile", "tourism"]
+    # 商务/公共服务 -> minimal_light
+    business_categories = ["business", "public-service", "public-security"]
+    
+    if professional_category in tech_categories:
+        return PREMIUM_THEMES["tech_blue"]
+    elif professional_category in nature_categories:
+        return PREMIUM_THEMES["nature_green"]
+    elif professional_category in creative_categories:
+        if teaching_scene == "review":
+            return PREMIUM_THEMES["purple_aurora"]
+        return PREMIUM_THEMES["warm_sunset"]
+    elif professional_category in business_categories:
+        return PREMIUM_THEMES["minimal_light"]
+    
+    # 默认返回极简风格
+    return PREMIUM_THEMES["minimal_light"]
 
 
 """

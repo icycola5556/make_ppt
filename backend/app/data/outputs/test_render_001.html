@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>液压系统工作原理</title>
+
+    <!-- Reveal.js 核心样式 (本地) -->
+    <link rel="stylesheet" href="/static/reveal.js/reveal.js-4.6.1/dist/reveal.css">
+    <link rel="stylesheet" href="/static/reveal.js/reveal.js-4.6.1/dist/theme/white.css">
+
+    <!-- 字体配置 (系统字体栈) -->
+    <link rel="stylesheet" href="/static/fonts/fonts.css">
+
+    <!-- 自定义样式 -->
+    <link rel="stylesheet" href="/styles/layouts/vocational.css">
+    <link rel="stylesheet" href="/styles/components/image-slot.css">
+    <link rel="stylesheet" href="/styles/themes/professional.css">
+
+    <style>
+        /* CSS Variables - 从 StyleConfig 动态生成 */
+        :root {
+                {
+                    {
+                    css_variables | safe
+                }
+            }
+        }
+        
+        /* 图片生成控制面板 */
+        .image-generation-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 9999;
+            min-width: 300px;
+        }
+        
+        .image-generation-panel h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .image-generation-panel button {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .image-generation-panel button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .image-generation-panel button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .progress-container {
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .progress-container.visible {
+            display: block;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+        }
+        
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .progress-status {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #333;
+            text-align: center;
+        }
+        
+        .progress-status.success {
+            color: #27ae60;
+        }
+        
+        .progress-status.warning {
+            color: #f39c12;
+        }
+        
+        /* 加载动画 */
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+        }
+        
+        .loading-container p {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .error-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #e74c3c;
+        }
+        
+        .error-container button {
+            margin-top: 10px;
+            padding: 5px 15px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 图片生成控制面板 -->
+    <div class="image-generation-panel">
+        <h4>📊 智能配图生成</h4>
+        <button id="generateImagesBtn">开始生成教学配图</button>
+        <div class="progress-container" id="imageProgressContainer">
+            <div class="progress-bar">
+                <div class="progress-bar-fill" id="imageProgressBar">0%</div>
+            </div>
+            <div class="progress-text">
+                <span id="imageProgressText">0 / 0</span>
+                <span>生成中...</span>
+            </div>
+            <div class="progress-status" id="imageProgressStatus">准备就绪</div>
+        </div>
+    </div>
+
+    <div class="reveal">
+        <div class="slides">
+            
+            <section class="slide-title_only" data-slide-type="title">
+    
+    <div class="layout-title-only">
+    <h1 class="slide-title">液压系统工作原理</h1>
+</div>
+    
+</section>
+            
+            <section class="slide-title_bullets" data-slide-type="objectives">
+    
+    <div class="layout-title-bullets">
+    <h2 class="slide-title">教学目标</h2>
+    <div class="bullets-container">
+        <ul class="bullet-list">
+            
+            <li class="bullet-item">知识目标：掌握液压系统的基本组成和工作原理</li>
+            
+            <li class="bullet-item">能力目标：能够识别液压系统的主要部件</li>
+            
+            <li class="bullet-item">素养目标：培养安全操作意识和规范操作习惯</li>
+            
+        </ul>
+    </div>
+</div>
+    
+</section>
+            
+            <section class="slide-grid_4" data-slide-type="concept">
+    
+    <div class="layout-grid-4">
+    <h2 class="slide-title">液压系统的组成</h2>
+    
+    <div class="grid-item grid-item-1">
+        
+        
+        <div class="image-placeholder" data-slot-id="page3_slot0">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压系统组成示意图</p>
+            </div>
+        </div>
+        
+        
+        <p class="grid-label">动力元件：液压泵,提供压力油</p>
+        
+    </div>
+    
+    <div class="grid-item grid-item-2">
+        
+        
+        <div class="image-placeholder" data-slot-id="page3_slot1">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压系统组成示意图</p>
+            </div>
+        </div>
+        
+        
+        <p class="grid-label">执行元件：液压缸、液压马达</p>
+        
+    </div>
+    
+    <div class="grid-item grid-item-3">
+        
+        
+        <div class="image-placeholder" data-slot-id="page3_slot2">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压系统组成示意图</p>
+            </div>
+        </div>
+        
+        
+        <p class="grid-label">控制元件：各种阀,控制流量和压力</p>
+        
+    </div>
+    
+    <div class="grid-item grid-item-4">
+        
+        
+        <div class="image-placeholder" data-slot-id="page3_slot3">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压系统组成示意图</p>
+            </div>
+        </div>
+        
+        
+        <p class="grid-label">辅助元件：油箱、滤油器、管路等</p>
+        
+    </div>
+    
+</div>
+    
+</section>
+            
+            <section class="slide-operation_steps" data-slide-type="steps">
+    
+    <div class="layout-operation-steps">
+    <h2 class="slide-title">液压系统启动步骤</h2>
+    <div class="content-image">
+        
+        
+        <div class="image-placeholder" data-slot-id="page4_slot0">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压系统操作面板</p>
+                <span class="placeholder-tags">系统, 步骤, 面板, 系统启动, 操作</span>
+            </div>
+        </div>
+        
+    </div>
+    <div class="content-steps">
+        <ol class="step-list">
+            
+            <li class="step-item">检查油箱油位,确保油量充足</li>
+            
+            <li class="step-item">检查各连接部位,确保无泄漏</li>
+            
+            <li class="step-item">启动液压泵,观察压力表读数</li>
+            
+            <li class="step-item">调节溢流阀,设定系统压力</li>
+            
+            <li class="step-item">试运行,检查系统工作是否正常</li>
+            
+        </ol>
+    </div>
+</div>
+    
+</section>
+            
+            <section class="slide-operation_steps" data-slide-type="comparison">
+    
+    <div class="layout-operation-steps">
+    <h2 class="slide-title">正确操作 vs 错误操作</h2>
+    <div class="content-image">
+        
+        
+        <div class="image-placeholder" data-slot-id="page5_slot0">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">正确的液压系统操作姿势</p>
+                <span class="placeholder-tags">错误操作, 系统, 操作, vs, 液压</span>
+            </div>
+        </div>
+        
+    </div>
+    <div class="content-steps">
+        <ol class="step-list">
+            
+            <li class="step-item">✓ 正确操作</li>
+            
+            <li class="step-item">✗ 错误操作</li>
+            
+        </ol>
+    </div>
+</div>
+    
+</section>
+            
+            <section class="slide-grid_4" data-slide-type="tools">
+    
+    <div class="layout-grid-4">
+    <h2 class="slide-title">常用液压工具</h2>
+    
+    <div class="grid-item grid-item-1">
+        
+        
+        <div class="image-placeholder" data-slot-id="page6_slot0">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压扳手</p>
+            </div>
+        </div>
+        
+        
+    </div>
+    
+    <div class="grid-item grid-item-2">
+        
+        
+        <div class="image-placeholder" data-slot-id="page6_slot1">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压扳手</p>
+            </div>
+        </div>
+        
+        
+    </div>
+    
+    <div class="grid-item grid-item-3">
+        
+        
+        <div class="image-placeholder" data-slot-id="page6_slot2">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压扳手</p>
+            </div>
+        </div>
+        
+        
+    </div>
+    
+    <div class="grid-item grid-item-4">
+        
+        
+        <div class="image-placeholder" data-slot-id="page6_slot3">
+            <div class="placeholder-content">
+                <img src="./static/icons/image.svg" class="placeholder-icon" alt="图片">
+                <p class="placeholder-text">液压扳手</p>
+            </div>
+        </div>
+        
+        
+    </div>
+    
+</div>
+    
+</section>
+            
+            <section class="slide-title_bullets" data-slide-type="summary">
+    
+    <div class="layout-title-bullets">
+    <h2 class="slide-title">课程总结</h2>
+    <div class="bullets-container">
+        <ul class="bullet-list">
+            
+            <li class="bullet-item">掌握了液压系统的基本组成</li>
+            
+            <li class="bullet-item">学会了液压系统的启动步骤</li>
+            
+            <li class="bullet-item">了解了正确与错误的操作方式</li>
+            
+            <li class="bullet-item">认识了常用的液压工具</li>
+            
+        </ul>
+    </div>
+</div>
+    
+</section>
+            
+        </div>
+    </div>
+
+    <!-- Reveal.js 核心脚本 (本地) -->
+    <script src="/static/reveal.js/reveal.js-4.6.1/dist/reveal.js"></script>
+
+    <script>
+        // Reveal.js 配置 (导出友好,无 3D 效果)
+        Reveal.initialize({
+            width: 1920,
+            height: 1080,
+            margin: 0.04,
+
+            // 禁用复杂动画
+            transition: 'slide',
+            transitionSpeed: 'default',
+            backgroundTransition: 'fade',
+
+            // 禁用 3D 效果
+            parallaxBackgroundImage: '',
+            parallaxBackgroundSize: '',
+
+            // 控制选项
+            controls: true,
+            progress: true,
+            center: false,
+            hash: true,
+
+            // 键盘导航
+            keyboard: true,
+            overview: true,
+            touch: true,
+
+            // 插件 (可选)
+            plugins: []
+        });
+    </script>
+    </script>
+
+    <!-- 图片状态轮询脚本 -->
+    
+    <script>
+        (function() {
+            const sessionId = "test_render_001";
+            const totalSlots = 10;
+            const POLL_INTERVAL = 3000;
+            
+            let generationStarted = false;
+            
+            // 开始生成按钮点击处理
+            document.getElementById('generateImagesBtn')?.addEventListener('click', function() {
+                startGeneration();
+            });
+            
+            function startGeneration() {
+                if (generationStarted) return;
+                generationStarted = true;
+                
+                const btn = document.getElementById('generateImagesBtn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '正在提交生成任务...';
+                }
+                
+                // 显示进度条
+                const progressContainer = document.getElementById('imageProgressContainer');
+                if (progressContainer) {
+                    progressContainer.style.display = 'block';
+                }
+                
+                // 触发生成任务
+                fetch(`/api/workflow/render/generate/${sessionId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ok) {
+                        updateProgress(0, data.total_slots || totalSlots);
+                        checkImageStatus();
+                    } else {
+                        alert('提交生成任务失败: ' + (data.error || '未知错误'));
+                        const btn = document.getElementById('generateImagesBtn');
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = '重新生成图片';
+                        }
+                    }
+                })
+                .catch(e => {
+                    console.error("Trigger error:", e);
+                    alert('提交生成任务失败');
+                    generationStarted = false;
+                });
+            }
+            
+            function updateProgress(done, total) {
+                const progressBar = document.getElementById('imageProgressBar');
+                const progressText = document.getElementById('imageProgressText');
+                
+                if (progressBar && total > 0) {
+                    const percent = Math.round((done / total) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressBar.textContent = `生成中 ${percent}%`;
+                }
+                
+                if (progressText) {
+                    progressText.textContent = `${done} / ${total}`;
+                }
+            }
+            
+            function checkImageStatus() {
+                fetch(`/api/workflow/render/status/${sessionId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.ok) {
+                            setTimeout(checkImageStatus, POLL_INTERVAL);
+                            return;
+                        }
+                        
+                        const images = data.images || {};
+                        let done = 0;
+                        let failed = 0;
+                        let generating = 0;
+                        
+                        // 统计状态
+                        for (const [slotId, imageData] of Object.entries(images)) {
+                            if (imageData.status === 'done') {
+                                done++;
+                                updateSlotImage(slotId, imageData);
+                            } else if (imageData.status === 'failed') {
+                                failed++;
+                                showSlotError(slotId, imageData.error);
+                            } else {
+                                generating++;
+                                showSlotLoading(slotId);
+                            }
+                        }
+                        
+                        const total = data.total || totalSlots;
+                        updateProgress(done + failed, total);
+                        
+                        // 更新完成状态
+                        const progressStatus = document.getElementById('imageProgressStatus');
+                        if (progressStatus) {
+                            if (done === total) {
+                                progressStatus.textContent = '✅ 图片生成完成！';
+                                progressStatus.className = 'success';
+                                const btn = document.getElementById('generateImagesBtn');
+                                if (btn) btn.style.display = 'none';
+                            } else if (failed > 0 && generating === 0) {
+                                progressStatus.textContent = `⚠️ ${failed}张图片生成失败`;
+                                progressStatus.className = 'warning';
+                                const btn = document.getElementById('generateImagesBtn');
+                                if (btn) {
+                                    btn.disabled = false;
+                                    btn.textContent = '重试失败图片';
+                                }
+                            }
+                        }
+                        
+                        if (done + failed < total) {
+                            setTimeout(checkImageStatus, POLL_INTERVAL);
+                        }
+                    })
+                    .catch(e => {
+                        console.error("Polling error:", e);
+                        setTimeout(checkImageStatus, POLL_INTERVAL);
+                    });
+            }
+            
+            function updateSlotImage(slotId, imageData) {
+                const placeholder = document.querySelector(`.image-placeholder[data-slot-id="${slotId}"]`);
+                if (!placeholder || placeholder.dataset.loaded) return;
+                
+                placeholder.innerHTML = 
+                    `<img src="/api/workflow/render/image/${sessionId}/${slotId}" 
+                          style="width:100%;height:100%;object-fit:contain;
+                                 border-radius:8px;opacity:0;transition:opacity 0.5s"
+                          onload="this.style.opacity=1"
+                          onerror="this.outerHTML='<div class=\'error\'>图片加载失败</div>'">`;
+                placeholder.dataset.loaded = "true";
+                placeholder.classList.remove('loading');
+                placeholder.classList.add('loaded');
+            }
+            
+            function showSlotLoading(slotId) {
+                const placeholder = document.querySelector(`.image-placeholder[data-slot-id="${slotId}"]`);
+                if (!placeholder || placeholder.dataset.loaded) return;
+                
+                if (!placeholder.classList.contains('loading')) {
+                    placeholder.innerHTML = `
+                        <div class="loading-container">
+                            <div class="loading-spinner"></div>
+                            <p>正在生成...</p>
+                        </div>
+                    `;
+                    placeholder.classList.add('loading');
+                }
+            }
+            
+            function showSlotError(slotId, error) {
+                const placeholder = document.querySelector(`.image-placeholder[data-slot-id="${slotId}"]`);
+                if (!placeholder) return;
+                
+                placeholder.innerHTML = `
+                    <div class="error-container">
+                        <p>❌ 生成失败</p>
+                        <button onclick="retrySlot('${slotId}')">重试</button>
+                    </div>
+                `;
+                placeholder.classList.remove('loading');
+            }
+            
+            // 全局函数：重试单个插槽
+            window.retrySlot = function(slotId) {
+                fetch(`/api/workflow/render/retry/${sessionId}/${slotId}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.ok) {
+                        showSlotLoading(slotId);
+                        checkImageStatus();
+                    }
+                });
+            };
+        })();
+    </script>
+    
+</body>
+
+</html>

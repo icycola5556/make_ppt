@@ -101,6 +101,14 @@ export const api = {
     })
   },
 
+  // 3.4 -> 3.5 数据同步
+  updateSlidesBatch(session_id, slides) {
+    return http('/api/workflow/slides/update_batch', {
+      method: 'POST',
+      body: { session_id, slides }
+    })
+  },
+
   // 3.4 -> 3.5 过渡：强制保存内容
   updateDeck(session_id, deck_content) {
     return http('/api/workflow/deck/update', {

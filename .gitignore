@@ -71,6 +71,11 @@ backend/data/sessions/*
 Thumbs.db
 .DS_Store
 
+# Generated files
+backend/data/outputs/
+backend/data/temp/
+*.zip
+
 # Documents
 docs/
 external_data/

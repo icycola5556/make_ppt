@@ -8,13 +8,11 @@
 
     <ApiConfig />
 
-    <!-- V3: 缓存状态展示 -->
     <CacheStatus 
       active-step="3.4" 
       @use-cache="handleUseCache" 
     />
 
-    <!-- V3: 缓存已加载提示 -->
     <section v-if="cacheLoaded && outline" class="card cache-loaded">
       <div class="h3">✅ 已加载 3.1+3.2+3.3 缓存</div>
       <div class="cache-info">
@@ -39,7 +37,6 @@
       <div v-if="busy && currentStep" class="progress">⏳ {{ currentStep }}</div>
     </section>
 
-    <!-- 输入区 -->
     <section class="card">
       <div class="h3">输入需求（完整流程 3.1→3.2→3.3→3.4）</div>
       <textarea class="textarea" v-model="rawText" placeholder="例如：给我一个机械专业「液压传动原理」的理论课课件，10页左右"></textarea>
@@ -61,7 +58,6 @@
       <div v-if="err" class="err">❌ {{ err }}</div>
     </section>
 
-    <!-- 问答交互（意图确认阶段） -->
     <section v-if="needUserInput" class="card warn">
       <div class="h3">请确认或补充信息</div>
       <div class="qbox" v-for="q in questions" :key="q.key">
@@ -81,7 +77,6 @@
       </div>
     </section>
 
-    <!-- 折叠的前置结果 -->
     <section v-if="teachingRequest && !needUserInput" class="card">
       <div class="h3">3.1 意图理解结果</div>
       <JsonBlock title="teaching_request.json" :value="teachingRequest" collapsed />
@@ -97,11 +92,9 @@
       <JsonBlock title="outline.json" :value="outline" collapsed />
     </section>
 
-    <!-- 内容结果 -->
     <section v-if="deckContent" class="card highlight">
       <div class="h3">3.4 页面内容结果</div>
       
-      <!-- 内容预览 -->
       <div class="content-preview">
         <div class="deck-title">{{ deckContent.title || '未命名课件' }}</div>
         <div class="page-count">共 {{ deckContent.pages?.length || 0 }} 页内容</div>
@@ -125,9 +118,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useWorkflow } from '../composables/useWorkflow'
 import { testCases } from '../composables/testCases'
+import { api } from '../api'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 import CacheStatus from '../components/common/CacheStatus.vue'
@@ -216,6 +210,64 @@ async function submitAnswers(useDefaults) {
     err.value = e.message
   }
 }
+
+// ✅ 新增：组件挂载时恢复缓存的内容数据
+onMounted(async () => {
+  // 从 localStorage 或 useWorkflow 中获取 sessionId
+  const sessionId = localStorage.getItem('current_session_id')
+
+  if (!sessionId) {
+    console.log('No session ID found, skipping cache restoration')
+    return
+  }
+
+  try {
+    const session = await api.getSession(sessionId)
+
+    if (!session) {
+      console.log('Session not found')
+      return
+    }
+
+    // 1. 恢复大纲 (3.4 依赖大纲显示左侧导航)
+    if (session.outline && session.outline.slides) {
+      console.log('🔄 恢复 3.3 大纲缓存...', session.outline.slides.length, '页')
+      outline.value = session.outline
+    }
+
+    // 2. 恢复教学需求和风格配置
+    if (session.teaching_request) {
+      teachingRequest.value = session.teaching_request
+    }
+    if (session.style_config) {
+      styleConfig.value = session.style_config
+    }
+
+    // 3. 检查是否有缓存的 DeckContent (已生成的内容)
+    if (session.deck_content && session.deck_content.pages) {
+      console.log('🔄 检测到 3.4 内容缓存，正在恢复...', session.deck_content.pages.length, '页')
+      deckContent.value = session.deck_content
+
+      // 计算有多少页已经生成了内容
+      let generatedCount = 0
+      session.deck_content.pages.forEach(page => {
+        const hasScript = page.speaker_notes && page.speaker_notes.length > 0
+        const bulletElem = page.elements.find(e => e.type === 'bullets')
+        const hasBullets = bulletElem && bulletElem.content && bulletElem.content.items && bulletElem.content.items.length > 0
+
+        if (hasScript || hasBullets) {
+          generatedCount++
+        }
+      })
+
+      console.log(`✅ 3.4 内容缓存恢复完成，已生成 ${generatedCount}/${session.deck_content.pages.length} 页`)
+      currentStep.value = `✅ 已恢复缓存：${generatedCount}/${session.deck_content.pages.length} 页内容已生成`
+      cacheLoaded.value = true
+    }
+  } catch (e) {
+    console.warn('恢复 3.4 缓存失败:', e)
+  }
+})
 </script>
 
 <style scoped>

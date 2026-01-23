@@ -10,7 +10,8 @@ from ...common.schemas import (
     SubjectInfo, KnowledgePointDetail, KnowledgeStructure, TeachingScenarioDetail,
     TeachingObjectivesStructured, SlideRequirementsDetail, CaseRequirement,
     ExerciseRequirement, InteractionRequirement, WarningRequirement,
-    SpecialRequirementsDetailed, PageDistribution, ParsingMetadata
+    SpecialRequirementsDetailed, PageDistribution, ParsingMetadata,
+    IdeologicalEducation  # ✅ 导入新类
 )
 from ...common.standards import default_goals
 
@@ -566,10 +567,37 @@ def _assess_teaching_scene(user_text: str, knowledge_points: List[KnowledgePoint
         max_count=min_slides + 2,
         lesson_duration_min=duration
     )
+    # ✅ 新增：思政意图识别
+    politics_keywords = ["思政", "价值观", "德育", "素养", "工匠", "职业道德", "爱国", "课程思政"]
+    has_politics = any(kw in t for kw in politics_keywords)
+
+    ideological_focus = []
+    if has_politics:
+        # 简单提取思政关键点
+        if "工匠" in t or "精神" in t:
+            ideological_focus.append("工匠精神")
+        if "职业道德" in t or "道德" in t:
+            ideological_focus.append("职业道德")
+        if "责任" in t:
+            ideological_focus.append("社会责任感")
+        if "团队" in t or "协作" in t:
+            ideological_focus.append("团队协作精神")
+
+        # 如果没有提取到具体点，使用默认值
+        if not ideological_focus:
+            ideological_focus = ["职业素养", "工匠精神"]
+
+    ideological_req = IdeologicalEducation(
+        enabled=has_politics,
+        focus_points=ideological_focus,
+        integration_method="embedded"  # 默认嵌入式
+    )
+
     req.special_requirements = SpecialRequirementsDetailed(
         cases=CaseRequirement(enabled="不要案例" not in t and "无案例" not in t, count=2 if "不要案例" not in t else 0),
         exercises=ExerciseRequirement(enabled="不要习题" not in t and "无习题" not in t, total_count=3 if "不要习题" not in t else 0),
-        interaction=InteractionRequirement(enabled="不要互动" not in t and "无互动" not in t)
+        interaction=InteractionRequirement(enabled="不要互动" not in t and "无互动" not in t),
+        ideological_education=ideological_req  # ✅ 注入思政字段
     )
     req.parsing_metadata = ParsingMetadata(
         raw_input=user_text,

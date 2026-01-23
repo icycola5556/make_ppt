@@ -34,6 +34,8 @@ from .orchestrator import WorkflowEngine
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .modules.content import build_base_deck
+from .modules.content.core import PAGE_CONTENT_SYSTEM_PROMPT
+from .modules.data_sync import sync_visual_suggestions_to_assets
 
 load_dotenv()
 
@@ -501,13 +503,81 @@ class SlideContentGenerateResponse(BaseModel):
     error: Optional[str] = None
 
 
+async def _enhance_exercise_content(
+    slide_bullets: List[str],
+    llm: LLMClient,
+    logger: WorkflowLogger,
+    session_id: str,
+    slide_index: int
+) -> SlideContent:
+    """习题页专用增强函数：100%保留题目，生成参考答案"""
+
+    # 分离题目和评分标准
+    questions = []
+    scoring = None
+    for b in slide_bullets:
+        if "评分" in b or "标准" in b:
+            scoring = b
+        else:
+            questions.append(b)
+
+    # 调用LLM生成参考答案
+    prompt = f"""为以下习题生成参考答案：
+
+习题列表：
+{json.dumps(questions, ensure_ascii=False)}
+
+要求：
+1. 每道题生成一个简明的参考答案（50-100字）
+2. 答案要准确、规范
+3. 返回JSON格式：{{"answers": ["答案1", "答案2", ...]}}
+
+只返回JSON，不要解释。"""
+
+    system_prompt = "你是高职课程习题答案生成助手，专注于提供准确、规范的参考答案。"
+
+    try:
+        result, _meta = await llm.chat_json(
+            system=system_prompt,
+            user=prompt,
+            json_schema_hint='{"answers": ["string"]}'
+        )
+        answers = result.get("answers", [])
+    except Exception as e:
+        logger.emit(session_id, "3.4", "exercise_answer_generation_failed", {
+            "slide_index": slide_index,
+            "error": str(e)
+        })
+        # Fallback: 生成占位答案
+        answers = [f"（参考答案待补充）" for _ in questions]
+
+    # 构建习题内容（题目+答案）
+    enhanced_bullets = []
+    for i, q in enumerate(questions):
+        answer = answers[i] if i < len(answers) else "（参考答案待补充）"
+        enhanced_bullets.append(f"{q}\n参考答案：{answer}")
+
+    if scoring:
+        enhanced_bullets.append(scoring)
+
+    script = "引导学生独立完成练习题，完成后逐题讲解参考答案，鼓励学生分享不同解题思路。"
+
+    return SlideContent(
+        script=script,
+        bullets=enhanced_bullets,
+        visual_suggestions=[
+            "diagram: 习题答题卡模板（展示题号和答题区域）"
+        ]
+    )
+
+
 @app.post("/api/workflow/slide/generate", response_model=SlideContentGenerateResponse)
 async def generate_slide_content(req: SlideContentGenerateRequest):
     """
-    Generate detailed content for a single slide (Phase 2 - Async Generation).
-
-    This endpoint uses 3.3's outline output as input for 3.4's content generation.
-    For exercises pages, original questions from outline are preserved.
+    Generate detailed content for a single slide with enhanced capabilities:
+    - Exercises pages: Preserve questions + generate reference answers
+    - General pages: Enhanced with Midjourney-style visual prompts
+    - Political education: Contextual integration when enabled
     """
     try:
         state = store.load(req.session_id)
@@ -530,18 +600,16 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
 
         slide = state.outline.slides[req.slide_index]
 
-        # 🚨 Special handling for exercises/quiz pages
-        # Preserve original questions from 3.3 outline, don't call LLM
+        # 🚨 Path 1: 习题页专用增强（保留题目 + 生成答案）
         if slide.slide_type in ("exercises", "quiz") and slide.bullets:
-            print(
-                f"[DEBUG] 3.4 generate_slide {req.slide_index}: SKIPPING LLM for exercises (preserving {len(slide.bullets)} questions)"
+            logger.emit(
+                req.session_id,
+                "3.4",
+                "exercise_enhancement_start",
+                {"slide_index": req.slide_index, "question_count": len(slide.bullets)}
             )
-
-            # Return content directly from outline bullets
-            content = SlideContent(
-                script=f"请学生独立完成以下练习题，完成后进行讲解。",
-                bullets=slide.bullets,  # Preserve original questions!
-                visual_suggestions=[f"建议配图：{slide.title}相关的评分表或题目展示图"],
+            content = await _enhance_exercise_content(
+                slide.bullets, llm, logger, req.session_id, req.slide_index
             )
             return SlideContentGenerateResponse(
                 ok=True, slide_index=req.slide_index, content=content
@@ -549,197 +617,180 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
 
         # Check if LLM is enabled
         if not llm.is_enabled():
-            # Return content based on outline when LLM is disabled
+            # Fallback when LLM is disabled
             mock_content = SlideContent(
                 script=f"讲解{slide.title}的核心内容，确保学生理解关键概念。",
                 bullets=slide.bullets
                 if slide.bullets
                 else [f"{slide.title}的要点1", f"{slide.title}的要点2"],
-                visual_suggestions=[f"建议配图：{slide.title}相关示意图"],
+                visual_suggestions=[],
             )
             return SlideContentGenerateResponse(
                 ok=True, slide_index=req.slide_index, content=mock_content
             )
 
-        # For other page types, use LLM to enhance content
-        # But still preserve the outline's bullets as the source of truth
-        context_info = f"""
-课程主题：{state.outline.deck_title}
-知识点：{", ".join(state.outline.knowledge_points)}
-教学场景：{state.outline.teaching_scene}
-"""
-
-        # 🔴 Key change: Include original bullets in prompt and instruct to preserve them
-        original_bullets = slide.bullets if slide.bullets else []
-
-        # 🎯 Adaptive Density: Determine image count hint based on slide type
-        slide_type_image_hints = {
-            # 0 images: 纯文字页面
-            "title": 0,
-            "cover": 0,
-            "objectives": 0,
-            "agenda": 0,
-            "summary": 0,
-            "qa": 0,
-            "reference": 0,
-            # 1 image: 标准配图页面
-            "concept": 1,
-            "theory": 1,
-            "steps": 1,
-            "process": 1,
-            "practice": 1,
-            "case": 1,
-            "warning": 1,
-            "intro": 1,
-            # 2 images: 对比/双主体页面
-            "comparison": 2,
-            "relations": 2,
-            # 4 images: 阵列/工具集/作品展示
-            "tools": 4,
-            "gallery": 4,
-            "equipment": 4,
-            "grid_4": 4,
-        }
-        image_hint = slide_type_image_hints.get(slide.slide_type, 1)
-
-        prompt = f"""请为以下PPT幻灯片生成内容，遵循"自适应密度"原则：
-
-{context_info}
-
-当前幻灯片 (第 {req.slide_index + 1}/{len(state.outline.slides)} 页)：
-- 类型：{slide.slide_type}
-- 标题：{slide.title}
-- 原始要点：{json.dumps(original_bullets, ensure_ascii=False)}
-
----
-
-## 🎯 自适应密度规则 (Adaptive Density)
-
-### 1️⃣ 动态要点 (Dynamic Bullets)
-- **优先保留原始要点**，不要改写核心内容
-- 如果原始要点为空，根据页面复杂度生成 **2-4 个** 关键要点：
-  - 简单页面（封面、目录、总结）：2 个精炼要点即可
-  - 复杂页面（概念讲解、步骤详解）：3-4 个要点
-- 每个要点 **10-20 字**，不要过长
-
-### 2️⃣ 按需配图 (Context-Aware Images)
-根据页面类型决定配图数量，**禁止超过 4 张**：
-
-| 配图数 | 适用场景 | 页面类型示例 |
-|--------|----------|-------------|
-| **0** | 纯文字强化、概念定义、金句引用 | title, cover, objectives, summary, qa |
-| **1** | 标准配置（左文右图） | concept, steps, case, warning |
-| **2** | 对比、冲突、双主体 | comparison, relations |
-| **4** | 阵列/工具集/作品展示 | tools, gallery, equipment |
-
-当前页面类型 `{slide.slide_type}` 建议配图数：**{image_hint}**
-
-### 3️⃣ 视觉建议格式
-如果需要配图，每条建议包含：
-- 图片类型（photo/diagram/icon/chart）
-- 主题描述（15字以内）
-
----
-
-## 📝 返回JSON格式
-
-```json
-{{
-    "script": "演讲脚本（2-4句话）",
-    "bullets": ["要点1", "要点2"],
-    "image_count": {image_hint},
-    "visual_suggestions": ["建议1", "建议2"]
-}}
-```
-
-**注意**：
-- `bullets` 数组长度 2-4，优先保留原始要点
-- `visual_suggestions` 数组长度必须等于 `image_count`（0/1/2）
-"""
-
+        # 🚨 Path 2: 通用页面增强（Midjourney风格图片描述 + 思政融入）
         logger.emit(
             req.session_id,
             "3.4",
-            "slide_generate_start",
-            {
-                "slide_index": req.slide_index,
-                "slide_type": slide.slide_type,
-                "image_hint": image_hint,
-            },
+            "general_page_generate_start",
+            {"slide_index": req.slide_index, "slide_type": slide.slide_type}
         )
 
-        # Call LLM with adaptive density constraints
-        system_prompt = """你是一位专业的PPT内容设计师，专注于"少即是多"的设计理念。
+        # 构建上下文信息
+        context_info = {
+            "deck_title": state.outline.deck_title,
+            "knowledge_points": state.outline.knowledge_points,
+            "teaching_scene": state.outline.teaching_scene,
+            "current_slide": {
+                "index": req.slide_index,
+                "total": len(state.outline.slides),
+                "type": slide.slide_type,
+                "title": slide.title,
+                "bullets": slide.bullets if slide.bullets else []
+            }
+        }
 
-## 核心原则
-1. **bullets**: 优先保留原始要点，不要改写；如需新增，控制在 2-4 条
-2. **视觉建议**: 严格按照 `image_count` 字段返回对应数量，绝不超过 4 张图
-3. **精炼表达**: 每条要点 10-20 字，演讲脚本 2-4 句话
+        # 🔴 关键：检测是否需要融入思政内容
+        special_focus = []
+        if hasattr(state, "teaching_request") and state.teaching_request:
+            if (state.teaching_request.special_requirements and
+                state.teaching_request.special_requirements.ideological_education and
+                state.teaching_request.special_requirements.ideological_education.enabled):
+                special_focus.append("incorporate_political_elements")
+                context_info["ideological_focus_points"] = (
+                    state.teaching_request.special_requirements.ideological_education.focus_points
+                )
 
-以JSON格式返回，数组长度可变。"""
+        # 构建用户提示词（使用增强版system prompt）
+        user_payload = {
+            "context": context_info,
+            "special_focus": special_focus
+        }
 
-        json_schema = """{"script": "string", "bullets": ["string"], "image_count": 0, "visual_suggestions": ["string"]}"""
+        user_msg = json.dumps(user_payload, ensure_ascii=False)
 
-        result, _meta = await llm.chat_json(
-            system=system_prompt, user=prompt, json_schema_hint=json_schema
-        )
+        # 调用LLM（使用content模块的PAGE_CONTENT_SYSTEM_PROMPT）
+        # 这个prompt已经包含了Midjourney风格图片描述规则
+        prompt_system = f"""{PAGE_CONTENT_SYSTEM_PROMPT}
 
-        if not result:
-            # Fallback: use original bullets from outline, respect image_hint
-            fallback_visuals = []
-            if image_hint >= 1:
-                fallback_visuals.append(f"diagram: {slide.title}相关示意图")
-            if image_hint >= 2:
-                fallback_visuals.append(f"photo: {slide.title}对比图")
+## 🎨 视觉描述升级规则（补充）
 
+**所有 visual_suggestions 必须遵循 Midjourney 提示词格式：**
+
+格式模板：
+```
+Subject: [主体物] | Details: [关键细节标注] | Style: [视觉风格] | View: [视角]
+```
+
+示例：
+- "Subject: 液压泵三维剖面 | Details: 标注进油口、出油口、齿轮、壳体 | Style: 工程教学插图，蓝白色系 | View: 立体剖视图"
+- "Subject: 汽车制动系统流程图 | Details: 刹车踏板→主缸→分泵→刹车盘，箭头标注油路 | Style: 简洁流程图，橙色高亮关键路径 | View: 俯视系统布局"
+
+❌ 禁止简单描述："液压泵图片"、"示意图"、"教学图片"
+"""
+
+        json_schema_hint = json.dumps(SlideContent.model_json_schema(), ensure_ascii=False)
+
+        try:
+            result, _meta = await llm.chat_json(
+                system=prompt_system,
+                user=user_msg,
+                json_schema_hint=json_schema_hint
+            )
+        except Exception as e:
+            logger.emit(
+                req.session_id,
+                "3.4",
+                "llm_generation_failed",
+                {"slide_index": req.slide_index, "error": str(e)}
+            )
+            # Fallback
             return SlideContentGenerateResponse(
                 ok=True,
                 slide_index=req.slide_index,
                 content=SlideContent(
                     script=f"讲解{slide.title}的核心内容。",
-                    bullets=original_bullets
-                    if original_bullets
-                    else [f"{slide.title}的要点"],
-                    visual_suggestions=fallback_visuals,
-                ),
+                    bullets=slide.bullets if slide.bullets else [f"{slide.title}的要点"],
+                    visual_suggestions=[]
+                )
             )
 
-        # If LLM didn't return proper bullets, use original from outline
-        result_bullets = result.get("bullets", [])
-        if not result_bullets or len(result_bullets) == 0:
-            result_bullets = (
-                original_bullets if original_bullets else [f"{slide.title}的要点"]
-            )
-
-        # 🎯 Enforce bullet limit: max 4 bullets
-        if len(result_bullets) > 4:
-            result_bullets = result_bullets[:4]
-
-        # 🎯 Enforce image limit: respect image_hint, max 4
-        result_visuals = result.get("visual_suggestions", [])
-        actual_image_count = result.get("image_count", image_hint)
-        actual_image_count = min(actual_image_count, 4)  # Never exceed 4
-
-        # Trim or pad visual_suggestions to match image_count
-        if len(result_visuals) > actual_image_count:
-            result_visuals = result_visuals[:actual_image_count]
-
+        # 构建返回内容
         content = SlideContent(
-            script=result.get("script", ""),
-            bullets=result_bullets,
-            visual_suggestions=result_visuals,
+            script=result.get("script", f"讲解{slide.title}的核心内容。"),
+            bullets=result.get("bullets", slide.bullets if slide.bullets else []),
+            visual_suggestions=result.get("visual_suggestions", [])
         )
 
         logger.emit(
             req.session_id,
             "3.4",
-            "slide_generate_done",
+            "general_page_generate_done",
             {
                 "slide_index": req.slide_index,
                 "bullet_count": len(content.bullets),
-                "image_count": len(content.visual_suggestions),
-            },
+                "visual_count": len(content.visual_suggestions),
+                "has_political_elements": "incorporate_political_elements" in special_focus
+            }
         )
+
+        # =========================================================
+        # ✅ 新增：增量缓存逻辑 (Incremental Caching)
+        # 确保每生成一页，立刻保存到后端 deck_content，防止刷新丢失
+        # =========================================================
+        try:
+            # 1. 确保 deck_content 骨架已初始化
+            if not state.deck_content:
+                if state.teaching_request and state.style_config and state.outline:
+                    from .modules.content.core import build_base_deck
+                    state.deck_content = build_base_deck(
+                        state.teaching_request, state.style_config, state.outline
+                    )
+
+            # 2. 将生成的内容回写到 deck_content 中
+            if state.deck_content and 0 <= req.slide_index < len(state.deck_content.pages):
+                page = state.deck_content.pages[req.slide_index]
+
+                # A. 更新演讲稿
+                page.speaker_notes = content.script
+
+                # B. 更新要点内容 (查找 bullets 元素)
+                if content.bullets:
+                    for elem in page.elements:
+                        if elem.type == "bullets" and "items" in elem.content:
+                            elem.content["items"] = content.bullets
+                            break
+
+                # C. 同步图片建议到 outline.assets (确保 3.5 渲染能用到)
+                if content.visual_suggestions:
+                    from .modules.data_sync import sync_visual_suggestions_to_assets
+                    outline_slide = state.outline.slides[req.slide_index]
+                    sync_visual_suggestions_to_assets(
+                        outline_slide,
+                        content.visual_suggestions,
+                        page.title
+                    )
+
+            # 3. 实时保存状态
+            store.save(state)
+
+            logger.emit(
+                req.session_id,
+                "3.4",
+                "slide_cached",
+                {"slide_index": req.slide_index, "cached": True}
+            )
+
+        except Exception as save_err:
+            # 仅打印错误，不要阻断返回给前端
+            logger.emit(
+                req.session_id,
+                "3.4",
+                "cache_warning",
+                {"slide_index": req.slide_index, "error": str(save_err)}
+            )
+        # =========================================================
 
         return SlideContentGenerateResponse(
             ok=True, slide_index=req.slide_index, content=content
@@ -755,6 +806,66 @@ async def generate_slide_content(req: SlideContentGenerateRequest):
         return SlideContentGenerateResponse(
             ok=False, slide_index=req.slide_index, error=str(e)
         )
+
+
+class SlideContentUpdate(BaseModel):
+    index: int
+    script: Optional[str] = ""
+    bullets: Optional[List[str]] = []
+
+
+class BatchUpdateSlidesRequest(BaseModel):
+    session_id: str
+    slides: List[SlideContentUpdate]
+
+
+@app.post("/api/workflow/slides/update_batch")
+async def update_slides_content_api(req: BatchUpdateSlidesRequest):
+    """
+    3.4 -> 3.5 过渡专用：
+    接收前端生成的文本内容(script/bullets)，回写到后端的 deck_content 中。
+    """
+    try:
+        # 1. 加载 Session
+        state = store.load(req.session_id)
+        if not state:
+            raise HTTPException(404, "Session not found")
+            
+        # 如果 deck_content 为空，尝试重新构建骨架 (自动修复机制)
+        if not state.deck_content:
+            from .modules.content import build_base_deck
+            if state.teaching_request and state.style_config and state.outline:
+                state.deck_content = build_base_deck(
+                    state.teaching_request, state.style_config, state.outline
+                )
+            else:
+                 raise HTTPException(400, "Missing context to build deck")
+
+        # 2. 建立更新映射
+        updates_map = {item.index: item for item in req.slides}
+        
+        # 3. 遍历后端 Deck 页面进行注入
+        for i, page in enumerate(state.deck_content.pages):
+            if i in updates_map:
+                update_data = updates_map[i]
+                if update_data.script:
+                    page.speaker_notes = update_data.script
+                if update_data.bullets:
+                    # 查找并更新 bullets 元素
+                    for elem in page.elements:
+                        if elem.type == "bullets" and "items" in elem.content:
+                            elem.content["items"] = update_data.bullets
+                            break 
+        
+        # 4. 标记阶段完成并保存
+        state.stage = "3.4"
+        store.save(state)
+        
+        return {"ok": True, "message": f"Updated {len(req.slides)} slides"}
+        
+    except Exception as e:
+        logger.emit(req.session_id, "3.4", "update_error", {"error": str(e)})
+        raise HTTPException(500, str(e))
 
 
 @app.post("/api/workflow/render")
@@ -2428,28 +2539,46 @@ async def assemble_deck_endpoint(req: AssembleDeckRequest):
         # B. 填入前端传来的用户内容
         # 建立索引映射
         content_map = {c.index: c for c in req.contents}
-        
+
         for i, page in enumerate(deck.pages):
+            # deck.pages 的索引通常是从 0 开始的顺序，但 slide.index 是 1 开始的
+            # 为了安全，我们用 outline 的 slides 对应
+            outline_slide = state.outline.slides[i]
+
             if i in content_map:
                 user_content = content_map[i]
-                
+
                 # 1. 更新演讲备注
                 page.speaker_notes = user_content.script
-                
+
                 # 2. 更新正文要点 (查找类型为 bullets 的元素)
                 # 这一步将前端生成的详细 bullets 写入 PPT 元素中
                 if user_content.bullets:
                     for elem in page.elements:
                         if elem.type == "bullets" and "items" in elem.content:
                             elem.content["items"] = user_content.bullets
-                            break 
-                        
+                            break
+
+                # ✅ 3. [核心修复] 同步图片建议到 outline
+                # 这样后续 3.5 渲染或者重新生图时，就能读到最新的 Prompt
+                if user_content.bullets: # 即使没有 visual_suggestions，也顺便更新下 bullets
+                     outline_slide.bullets = user_content.bullets
+
+                if hasattr(user_content, "visual_suggestions") and user_content.visual_suggestions:
+                    # 调用同步函数，将字符串转为 Asset 对象存入 outline
+                    sync_visual_suggestions_to_assets(
+                        outline_slide,
+                        user_content.visual_suggestions,
+                        page.title
+                    )
+
         # C. 保存完整的 PPT 结构
+        # 注意：我们同时更新了 state.outline (assets) 和 state.deck_content (content)
         state.deck_content = deck
         state.stage = "3.4" # 标记完成
         store.save(state)
         
-        return {"ok": True, "message": "Deck assembled successfully"}
+        return {"ok": True, "message": "Deck assembled and assets synced"}
         
     except Exception as e:
         import traceback
