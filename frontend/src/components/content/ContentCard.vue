@@ -117,7 +117,7 @@ const slideTypeMap = {
   summary: '总结', bridge: '过渡', transition: '过渡',
   agenda: '议程', qa: '问答', discussion: '讨论',
   exercise: '练习', exercises: '练习', warning: '注意',
-  reference: '参考', appendix: '附录', subtitle: '副标题',
+  reference: '参考', appendix: '附录',
   structure: '结构', map: '地图'
 }
 

@@ -653,7 +653,6 @@ const SLIDE_TYPE_FALLBACK_MAP = {
   'data': '数据',
   'map': '地图',
   'appendix': '附录',
-  'subtitle': '副标题',
 }
 
 function getSlideTypeLabel(type) {
