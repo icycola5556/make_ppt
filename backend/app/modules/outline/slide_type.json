@@ -25,12 +25,6 @@
       "instruction": "列出本次课程的学习目标"
     },
     {
-      "slide_type": "subtitle",
-      "name": "副标题",
-      "description": "章节子标题页，用于拆分大主题为子模块",
-      "instruction": "请提供子章节标题和核心内容概述"
-    },
-    {
       "slide_type": "concept",
       "name": "概念",
       "description": "用于讲解专业术语、基础概念、判定标准",

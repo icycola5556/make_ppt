@@ -108,9 +108,17 @@ class HTMLRenderer:
     @staticmethod
     def _copy_assets(output_dir: str):
         try:
+            # 定义忽略函数，跳过 node_modules 和其他不必要的目录
+            def ignore_patterns(directory, files):
+                ignored = []
+                for f in files:
+                    if f in ('node_modules', '.git', '.github', 'test', 'examples'):
+                        ignored.append(f)
+                return ignored
+            
             target_static = Path(output_dir) / "static"
             if target_static.exists(): shutil.rmtree(target_static)
-            if SRC_STATIC_DIR.exists(): shutil.copytree(SRC_STATIC_DIR, target_static)
+            if SRC_STATIC_DIR.exists(): shutil.copytree(SRC_STATIC_DIR, target_static, ignore=ignore_patterns)
             
             target_styles = Path(output_dir) / "styles"
             if target_styles.exists(): shutil.rmtree(target_styles)

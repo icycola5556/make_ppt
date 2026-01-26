@@ -97,7 +97,6 @@ const slideTypeMap = {
   warning: { label: '注意', color: '#ea580c' },
   reference: { label: '参考', color: '#78716c' },
   appendix: { label: '附录', color: '#737373' },
-  subtitle: { label: '副标题', color: '#4b5563' },
   structure: { label: '结构', color: '#4f46e5' },
   map: { label: '地图', color: '#059669' }
 }

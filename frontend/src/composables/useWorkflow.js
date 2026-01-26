@@ -202,57 +202,69 @@ export function useWorkflow() {
         sessionId.value = r.session_id || r.sessionId || r.session
         return sessionId.value
     }
+    // ========================================
+    // 状态消息映射表 (State Machine Pattern)
+    // ========================================
+    const STAGE_STATUS_MAP = {
+        '3.1': '3.1 意图理解中...',
+        '3.2': '3.2 风格设计中...',
+        '3.3': '3.3 大纲生成中...',
+        '3.4': '3.4 内容生成中...',
+        'done': '完成'
+    }
+
+    // 3.1阶段的子状态映射
+    const INTERACTION_STAGE_STATUS = {
+        'confirm_goals': '大模型确认页数信息中...',
+        'ask_config_modification': '等待用户确认...',
+        'adjust_configurations': '等待用户确认...',
+        'final_confirm': '等待用户确认...',
+        'default': '3.1 意图理解中...'
+    }
 
     // 根据sessionState的stage动态更新currentStep
     function updateCurrentStepFromSession() {
         if (!sessionState.value) {
-            // 如果没有sessionState，尝试从响应中获取stage
-            currentStep.value = '完成'
+            currentStep.value = STAGE_STATUS_MAP['done']
             return
         }
 
         const stage = sessionState.value.stage
         const teachingReq = sessionState.value.teaching_request
 
+        // 处理3.1阶段的子状态
         if (stage === '3.1') {
-            // 根据interaction_stage判断具体状态
             const interactionStage = teachingReq?.internal_interaction_stage || teachingReq?.interaction_stage
-
-            // 检查是否在页面冲突确认阶段（confirm_goals阶段）
-            if (interactionStage === 'confirm_goals') {
-                // 如果已经有LLM推荐信息，说明LLM正在或已经确认页数
-                if (teachingReq?.slide_requirements?.llm_recommended_count ||
-                    teachingReq?.interaction_metadata?._llm_recommendation_explanation) {
-                    currentStep.value = '大模型确认页数信息中...'
-                } else {
-                    // 正在等待LLM确认页数
-                    currentStep.value = '大模型确认页数信息中...'
-                }
+            
+            // 优先检查交互阶段状态
+            if (interactionStage && INTERACTION_STAGE_STATUS[interactionStage]) {
+                currentStep.value = INTERACTION_STAGE_STATUS[interactionStage]
+                return
             }
-            // 检查是否在配置修改阶段（等待用户确认配置）
-            else if (interactionStage === 'ask_config_modification' ||
-                interactionStage === 'adjust_configurations') {
-                currentStep.value = '等待用户确认...'
-            }
-            // 检查是否有LLM推荐页数信息（用户确认后，LLM正在确认页数）
-            else if (teachingReq && teachingReq.slide_requirements &&
-                (teachingReq.slide_requirements.llm_recommended_count ||
-                    teachingReq.interaction_metadata?._llm_recommendation_explanation)) {
+            
+            // 检查是否有LLM推荐页数信息
+            if (teachingReq?.slide_requirements?.llm_recommended_count) {
                 currentStep.value = '大模型确认页数信息中...'
-            } else if (needUserInput.value) {
-                currentStep.value = '等待用户确认...'
-            } else {
-                currentStep.value = '3.1 意图理解中...'
+                return
             }
-        } else if (stage === '3.2') {
-            currentStep.value = '3.2 风格设计中...'
-        } else if (stage === '3.3') {
-            currentStep.value = '3.3 大纲生成中...'
-        } else if (stage === '3.4') {
-            currentStep.value = '3.4 内容生成中...'
-        } else {
-            currentStep.value = '完成'
+            
+            // 检查是否需要用户输入
+            if (needUserInput.value) {
+                currentStep.value = '等待用户确认...'
+                return
+            }
+            
+            currentStep.value = STAGE_STATUS_MAP['3.1']
+            return
         }
+
+        // 其他阶段直接使用映射
+        currentStep.value = STAGE_STATUS_MAP[stage] || STAGE_STATUS_MAP['done']
+    }
+
+    // 辅助函数：获取指定阶段的状态消息
+    function getStatusForStage(stage) {
+        return STAGE_STATUS_MAP[stage] || STAGE_STATUS_MAP['done']
     }
 
     async function runWorkflow({ user_text, answers: ans = {}, auto_fill_defaults = false, stop_at = null, style_name = null, _continue_to_3_3 = false, _continue_to_3_2 = false, _continue_to_3_4 = false }) {

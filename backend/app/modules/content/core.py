@@ -287,39 +287,90 @@ def _chunk_pages(pages: List[SlidePage], size: int) -> List[List[SlidePage]]:
 def _review_and_fix_page(
     page: SlidePage,
     outline: OutlineSlide,
-    req: TeachingRequest
+    req: TeachingRequest,
+    auto_fix: bool = True
 ) -> SlidePage:
     """
-    内置内容审核 - 生成时自动检查质量问题
+    内置内容审核 + 自动修复 - 生成时自动检查并修复质量问题
     
     检查项：
     1. 要点数量 (2-6个)
-    2. 占位符残留
-    3. 内容长度
+    2. 占位符残留 -> 自动删除
+    3. 内容长度 -> 自动截断
+    4. 重复内容 -> 自动去重
     
     问题会写入 speaker_notes 供教师查看
     """
     issues = []
+    fixes_applied = []
     
-    # 1. 检查要点数量
+    # 占位符模式
+    placeholder_patterns = ["____", "___", "TODO", "待填充", "[待定]", "待补充", "待编辑"]
+    
+    # 1. 检查并修复各元素
     for elem in page.elements:
         if elem.type == "bullets" and isinstance(elem.content, dict):
             items = elem.content.get("items", [])
+            original_count = len(items)
+            
+            # 1a. 移除包含占位符的条目
+            if auto_fix:
+                cleaned_items = []
+                for item in items:
+                    item_str = str(item)
+                    has_placeholder = any(p in item_str for p in placeholder_patterns)
+                    if not has_placeholder:
+                        cleaned_items.append(item)
+                    else:
+                        fixes_applied.append(f"移除占位符条目: '{item_str[:30]}...'")
+                items = cleaned_items
+            
+            # 1b. 去重
+            if auto_fix:
+                seen = set()
+                unique_items = []
+                for item in items:
+                    # 使用前20个字符作为去重依据
+                    key = str(item)[:20].strip().lower()
+                    if key not in seen:
+                        seen.add(key)
+                        unique_items.append(item)
+                    else:
+                        fixes_applied.append(f"移除重复条目")
+                if len(unique_items) < len(items):
+                    items = unique_items
+            
+            # 1c. 截断过长内容
+            if auto_fix:
+                max_bullet_len = 80
+                for i, item in enumerate(items):
+                    if len(item) > max_bullet_len:
+                        items[i] = item[:max_bullet_len-3] + "..."
+                        fixes_applied.append(f"截断过长条目 ({len(item)}字)")
+            
+            # 更新元素内容
+            if auto_fix:
+                elem.content["items"] = items
+            
+            # 记录问题
             if len(items) < 2 and page.slide_type not in ("title", "cover", "bridge"):
                 issues.append(f"要点数量不足 ({len(items)}个，建议2-6个)")
             if len(items) > 6:
                 issues.append(f"要点过多 ({len(items)}个，建议精简至6个以内)")
+        
+        # 检查其他元素类型的占位符
+        elif elem.type in ("text", "quote"):
+            content_str = str(elem.content)
+            for pattern in placeholder_patterns:
+                if pattern in content_str:
+                    issues.append(f"发现未填充占位符: '{pattern}'")
+                    # 自动修复：替换占位符为省略号
+                    if auto_fix and isinstance(elem.content, dict) and "text" in elem.content:
+                        elem.content["text"] = elem.content["text"].replace(pattern, "…")
+                        fixes_applied.append(f"替换占位符为省略号")
+                    break
     
-    # 2. 检查占位符残留
-    placeholder_patterns = ["____", "TODO", "待填充", "___", "[待定]"]
-    for elem in page.elements:
-        content_str = str(elem.content)
-        for pattern in placeholder_patterns:
-            if pattern in content_str:
-                issues.append(f"发现未填充占位符: '{pattern}'")
-                break
-    
-    # 3. 检查内容与大纲匹配度
+    # 2. 检查内容与大纲匹配度
     if outline.bullets:
         outline_bullet_count = len(outline.bullets)
         page_bullets = []
@@ -330,13 +381,19 @@ def _review_and_fix_page(
         if len(page_bullets) < outline_bullet_count - 1:
             issues.append(f"内容要点少于大纲 ({len(page_bullets)} vs {outline_bullet_count})")
     
-    # 写入审核结果
+    # 3. 写入审核结果
+    notes_parts = []
+    if fixes_applied:
+        notes_parts.append(f"🔧 自动修复: {'; '.join(fixes_applied[:3])}")
     if issues:
-        warning_text = "⚠️ 内容审核: " + "; ".join(issues)
+        notes_parts.append(f"⚠️ 内容审核: {'; '.join(issues)}")
+    
+    if notes_parts:
+        review_text = "\n".join(notes_parts)
         if page.speaker_notes:
-            page.speaker_notes = warning_text + "\n---\n" + page.speaker_notes
+            page.speaker_notes = review_text + "\n---\n" + page.speaker_notes
         else:
-            page.speaker_notes = warning_text
+            page.speaker_notes = review_text
     
     return page
 
