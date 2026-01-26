@@ -8,6 +8,7 @@ import OutlineEditorView from '../views/OutlineEditorView.vue'
 import ContentGeneratorView from '../views/ContentGeneratorView.vue'
 
 const routes = [
+    { path: '/design-demo', name: 'DesignSystemDemo', component: () => import('../views/DesignSystemDemo.vue') },
     { path: '/', redirect: '/3.1' },
     { path: '/3.1', name: 'Module3.1', component: Module31Intent },
     { path: '/3.2', name: 'Module3.2', component: Module32Style },

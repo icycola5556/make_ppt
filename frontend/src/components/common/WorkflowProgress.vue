@@ -98,7 +98,7 @@ watch(() => props.messages.length, async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--spacing-6);
   max-width: 480px;
   margin: 0 auto;
 }
@@ -109,7 +109,7 @@ watch(() => props.messages.length, async () => {
   max-width: none;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(4px);
-  z-index: 50;
+  z-index: var(--z-modal);
 }
 
 /* 加载动画 */
@@ -117,23 +117,23 @@ watch(() => props.messages.length, async () => {
   position: relative;
   width: 48px;
   height: 48px;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .spinner-outer {
   position: absolute;
   inset: 0;
-  border: 4px solid #e5e7eb;
-  border-radius: 50%;
+  border: 4px solid var(--border-light);
+  border-radius: var(--radius-full);
 }
 
 .spinner-inner {
   position: absolute;
   inset: 0;
-  border: 4px solid #2563eb;
-  border-radius: 50%;
+  border: 4px solid var(--color-brand);
+  border-radius: var(--radius-full);
   border-top-color: transparent;
-  animation: spin 1s linear infinite;
+  animation: spin var(--duration-loading) linear infinite;
 }
 
 @keyframes spin {
@@ -142,47 +142,47 @@ watch(() => props.messages.length, async () => {
 
 /* 主消息 */
 .main-message {
-  font-size: 18px;
-  color: #374151;
-  margin-bottom: 16px;
+  font-size: var(--font-size-lg);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-4);
   text-align: center;
 }
 
 /* 进度条 */
 .progress-section {
   width: 100%;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .progress-header {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
-  color: #6b7280;
-  margin-bottom: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
 }
 
 .step-label {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .percent {
-  font-weight: 600;
-  color: #2563eb;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-brand);
 }
 
 .progress-bar {
   height: 8px;
-  background: #e5e7eb;
-  border-radius: 4px;
+  background: var(--border-light);
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(to right, #3b82f6, #2563eb);
+  background: linear-gradient(to right, var(--color-brand), var(--color-brand-hover));
   transition: width 0.3s ease;
-  border-radius: 4px;
+  border-radius: var(--radius-full);
 }
 
 /* 消息日志 */
@@ -190,48 +190,48 @@ watch(() => props.messages.length, async () => {
   width: 100%;
   max-height: 160px;
   overflow-y: auto;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 12px;
-  margin-bottom: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
+  font-size: var(--font-size-xs);
+  margin-bottom: var(--spacing-4);
 }
 
 .log-item {
-  padding: 4px 0;
-  color: #6b7280;
+  padding: var(--spacing-1) 0;
+  color: var(--text-secondary);
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .log-item.latest {
-  color: #1d4ed8;
-  font-weight: 500;
+  color: var(--color-brand);
+  font-weight: var(--font-weight-medium);
 }
 
 .indicator {
-  color: #93c5fd;
+  color: var(--color-brand-light);
 }
 
 /* 后台按钮 */
 .bg-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  font-size: 14px;
-  color: #6b7280;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  font-size: var(--font-size-base);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-fast);
 }
 
 .bg-btn:hover {
-  color: #2563eb;
-  border-color: #2563eb;
-  background: #eff6ff;
+  color: var(--color-brand);
+  border-color: var(--color-brand);
+  background: var(--color-brand-light);
 }
 </style>

@@ -1,4 +1,16 @@
-:root {
+/**
+ * Global Styles - 「温润学府」设计系统
+ * 这个文件保留用于向后兼容，主要样式已移至 src/styles/
+ */
+
+/* 导入设计令牌和组件样式 */
+@import './src/styles/tokens.css';
+@import './src/styles/components.css';
+
+/* 保留旧版样式的过渡兼容（逐步迁移后可删除） */
+
+/* 旧版暗色主题变量（已弃用，保留兼容） */
+.legacy-dark-theme {
   --bg: #0b1220;
   --card: #111827;
   --text: #e5e7eb;
@@ -6,80 +18,48 @@
   --border: #243144;
 }
 
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-  background: var(--bg);
-  color: var(--text);
-}
-
-.container {
+/* 旧版容器（已迁移到 .container） */
+.container-legacy {
   max-width: 1100px;
   margin: 0 auto;
   padding: 24px;
 }
 
-header h1 {
-  margin: 0 0 6px 0;
-  font-size: 22px;
-}
-
-.sub { margin: 0 0 18px 0; color: var(--muted); }
-
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
+/* 旧版卡片（已迁移到 .card） */
+.card-legacy {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
   border-radius: 14px;
   padding: 16px;
   margin-bottom: 16px;
 }
 
-h2 { margin: 0 0 10px 0; font-size: 16px; }
-h3 { margin: 12px 0 8px 0; font-size: 14px; }
-
-textarea, input, select {
+/* 旧版表单元素（已迁移到 .input, .textarea） */
+textarea.legacy, input.legacy, select.legacy {
   width: 100%;
-  background: #0f172a;
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
   border-radius: 10px;
   padding: 10px;
 }
 
-button {
-  background: #2563eb;
+/* 旧版按钮（已迁移到 .btn-primary, .btn-secondary） */
+button.legacy {
+  background: var(--color-brand);
   color: white;
   border: 0;
   border-radius: 10px;
   padding: 10px 14px;
   cursor: pointer;
 }
-button.secondary {
-  background: #374151;
+
+button.legacy.secondary {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
-.row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  flex-wrap: wrap;
-}
-
-.checkbox { color: var(--muted); }
-
-pre {
-  background: #0f172a;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  overflow: auto;
-  max-height: 360px;
-}
-
-.muted { color: var(--muted); }
-
+/* 旧版网格（保留兼容） */
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -90,6 +70,26 @@ pre {
   .grid { grid-template-columns: 1fr; }
 }
 
+/* 旧版行布局（保留兼容） */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+/* 旧版代码块（保留兼容） */
+pre {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 10px;
+  overflow: auto;
+  max-height: 360px;
+}
+
+/* 旧版表单问题样式（保留兼容） */
 .q { margin-bottom: 12px; }
-.q-label { display: block; margin-bottom: 6px; color: var(--text); }
+.q-label { display: block; margin-bottom: 6px; color: var(--text-primary); }
 .q-input { width: 100%; }

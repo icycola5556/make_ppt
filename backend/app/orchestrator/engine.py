@@ -1326,6 +1326,9 @@ class WorkflowEngine:
             from ..modules.render.services import ImageService
 
             # 渲染HTML幻灯片
+            # 渲染HTML幻灯片
+            template_id = state.style_config.style_name if state.style_config else "business"
+            
             render_result = await render_html_slides(
                 deck_content=state.deck_content,
                 style_config=state.style_config,
@@ -1333,6 +1336,7 @@ class WorkflowEngine:
                 session_id=session_id,
                 output_dir=f"outputs/{session_id}",
                 llm=self.llm,
+                template_id=template_id,
             )
 
             state.render_result = render_result
