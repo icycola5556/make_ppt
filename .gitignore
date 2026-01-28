@@ -47,6 +47,11 @@ backend/data/logs/*
 backend/data/sessions/*
 !backend/data/logs/.gitkeep
 !backend/data/sessions/.gitkeep
+.agent
+.claude
+.cursor
+.idea
+
 
 # 环境变量
 .env
@@ -74,3 +79,8 @@ Thumbs.db
 # Documents
 docs/
 external_data/
+
+# Temporary files
+temp_venv/
+outputs/
+*.zip

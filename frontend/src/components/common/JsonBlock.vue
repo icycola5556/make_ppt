@@ -39,10 +39,55 @@ function download() {
 </script>
 
 <style scoped>
-.block { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background: #fff; }
-.block-header { display:flex; gap:8px; align-items:center; justify-content:space-between; padding: 10px 12px; background:#f9fafb; border-bottom:1px solid #e5e7eb; }
-.title { font-weight: 600; }
-.btn { border: 1px solid #d1d5db; background:#fff; border-radius: 8px; padding: 6px 10px; cursor:pointer; }
-.btn:hover { background:#f3f4f6; }
-.pre { margin: 0; padding: 12px; overflow:auto; max-height: 420px; font-size: 12px; line-height: 1.5; }
+.block {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.block-header {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-3) var(--spacing-4);
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.title {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.btn {
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2) var(--spacing-3);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  transition: all var(--duration-fast);
+}
+
+.btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pre {
+  margin: 0;
+  padding: var(--spacing-4);
+  overflow: auto;
+  max-height: 420px;
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+}
 </style>

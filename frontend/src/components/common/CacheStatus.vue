@@ -95,88 +95,97 @@ function handleClearAll() {
 
 <style scoped>
 .cache-status {
-  background: linear-gradient(135deg, #f0f9ff, #f8fafc);
-  border: 1px solid #bae6fd;
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--color-brand-light), var(--bg-input));
+  border: 1px solid var(--color-brand-light);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3);
+  margin-bottom: var(--spacing-4);
 }
 
 .cache-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px dashed #bae6fd;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-3);
+  padding-bottom: var(--spacing-2);
+  border-bottom: 1px dashed var(--color-brand-light);
 }
 
-.cache-icon { font-size: 16px; }
-.cache-title { font-weight: 600; font-size: 13px; color: #0369a1; flex: 1; }
+.cache-icon { font-size: var(--font-size-lg); }
+.cache-title {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--color-brand);
+  flex: 1;
+}
 
 .clear-btn {
-  font-size: 11px;
-  padding: 4px 8px;
-  border: 1px solid #fecaca;
-  background: #fef2f2;
-  color: #dc2626;
-  border-radius: 6px;
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-1) var(--spacing-2);
+  border: 1px solid var(--color-error-light);
+  background: var(--color-error-light);
+  color: var(--color-error);
+  border-radius: var(--radius-md);
   cursor: pointer;
+  transition: all var(--duration-fast);
 }
-.clear-btn:hover { background: #fee2e2; }
+
+.clear-btn:hover {
+  background: #FEE2E2;
+}
 
 .cache-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .cache-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-fast);
   min-width: 180px;
   flex: 1;
 }
 
 .cache-item:hover {
-  border-color: #0ea5e9;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
+  border-color: var(--color-brand);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
 }
 
 .cache-item.cached {
-  background: #f0fdf4;
-  border-color: #86efac;
+  background: var(--color-success-light);
+  border-color: var(--color-success);
 }
 
 .cache-item.active {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
 .step-badge {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background: #e2e8f0;
-  color: #64748b;
+  border-radius: var(--radius-full);
+  background: var(--border-light);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   flex-shrink: 0;
 }
 
 .step-badge.cached {
-  background: #22c55e;
-  color: white;
+  background: var(--color-success);
+  color: var(--text-inverse);
 }
 
 .step-info {
@@ -188,44 +197,45 @@ function handleClearAll() {
 }
 
 .step-name {
-  font-weight: 600;
-  font-size: 12px;
-  color: #334155;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
 }
 
 .step-status {
-  font-size: 11px;
-  color: #16a34a;
+  font-size: var(--font-size-xs);
+  color: var(--color-success);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .step-status.empty {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .use-btn {
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  background: #0ea5e9;
-  color: white;
+  padding: var(--spacing-1) var(--spacing-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  background: var(--color-brand);
+  color: var(--text-inverse);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
+  transition: all var(--duration-fast);
 }
 
 .use-btn:hover {
-  background: #0284c7;
+  background: var(--color-brand-hover);
 }
 
 .cache-hint {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed #bae6fd;
-  font-size: 11px;
-  color: #0369a1;
+  margin-top: var(--spacing-3);
+  padding-top: var(--spacing-2);
+  border-top: 1px dashed var(--color-brand-light);
+  font-size: var(--font-size-xs);
+  color: var(--color-brand);
 }
 </style>
