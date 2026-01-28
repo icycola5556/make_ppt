@@ -183,6 +183,11 @@ class TeachingRequest(BaseModel):
     )
     parsing_metadata: ParsingMetadata = Field(default_factory=ParsingMetadata)
 
+    # ===== 模板选择字段 (从3.2迁移) =====
+    # 风格模板名称，基于teaching_scene自动选择或用户手动指定
+    # 有效值: "theory_clean", "practice_steps", "review_mindmap"
+    style_name: Optional[Literal["theory_clean", "practice_steps", "review_mindmap"]] = None
+
     # ===== 内部状态字段 (保持状态机逻辑) =====
     # 用于内部多轮交互逻辑，使用 exclude=True 从对外 API 隐藏
     internal_interaction_stage: Literal[
@@ -455,7 +460,7 @@ class Question(BaseModel):
 
 
 class WorkflowRunRequest(BaseModel):
-    session_id: str
+    session_id: Optional[str] = None
     user_text: Optional[str] = None
     # Backward/forward compatible alias (some frontends send this key)
     user_input_text: Optional[str] = None

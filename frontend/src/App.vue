@@ -72,9 +72,9 @@ onMounted(() => {
 })
 
 // 步骤配置 - 使用新的模块装饰色
+// 注意：3.2 风格设计已移除，功能已合并到 3.1 意图识别
 const steps = [
   { id: '3.1', label: '意图理解', color: '#6366F1', colorLight: '#E0E7FF' },
-  { id: '3.2', label: '风格设计', color: '#0EA5E9', colorLight: '#E0F2FE' },
   { id: '3.3', label: '大纲生成', color: '#8B5CF6', colorLight: '#EDE9FE' },
   { id: '3.4', label: '内容生成', color: '#F97316', colorLight: '#FFEDD5' },
   { id: '3.5', label: '智能排版', color: '#EC4899', colorLight: '#FCE7F3' },
@@ -83,7 +83,6 @@ const steps = [
 const currentStep = computed(() => {
   const path = route.path
   if (path === '/' || path === '/3.1') return '3.1'
-  if (path.includes('3.2')) return '3.2'
   if (path.includes('3.3') || path.includes('outline-editor')) return '3.3'
   if (path.includes('3.4') || path.includes('content-generator')) return '3.4'
   if (path.includes('3.5')) return '3.5'

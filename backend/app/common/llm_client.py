@@ -47,7 +47,11 @@ class LLMClient:
         if not self.is_enabled():
             raise RuntimeError("LLM disabled")
 
-        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        base = self.base_url.rstrip('/')
+        if base.endswith("/chat/completions"):
+            url = base
+        else:
+            url = f"{base}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -83,7 +87,11 @@ class LLMClient:
             # Caller should fall back to heuristic.
             raise RuntimeError("LLM disabled (mock mode or missing OPENAI_API_KEY).")
 
-        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        base = self.base_url.rstrip('/')
+        if base.endswith("/chat/completions"):
+            url = base
+        else:
+            url = f"{base}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -165,7 +173,11 @@ class LLMClient:
         if not self.is_enabled():
             raise RuntimeError("LLM disabled (mock mode or missing OPENAI_API_KEY).")
         
-        url = f"{self.base_url.rstrip('/')}/chat/completions"
+        base = self.base_url.rstrip('/')
+        if base.endswith("/chat/completions"):
+            url = base
+        else:
+            url = f"{base}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

@@ -126,24 +126,37 @@
       </div>
       
       <JsonBlock title="deck_content.json" :value="deckContent" filename="deck_content.json" />
+
+      <!-- 进入3.5渲染的按钮 -->
+      <div class="continue-section">
+        <div class="continue-hint">✨ 内容已生成，可以进入智能排版</div>
+        <button class="primary continue-btn hover-lift" @click="goToRender">
+          进入 3.5 智能排版 →
+        </button>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useWorkflow } from '../composables/useWorkflow'
 import { testCases } from '../composables/testCases'
 import ApiConfig from '../components/common/ApiConfig.vue'
 import JsonBlock from '../components/common/JsonBlock.vue'
 import CacheStatus from '../components/common/CacheStatus.vue'
 
-const { 
-  busy, err, currentStep, needUserInput, questions, answers, 
-  teachingRequest, styleConfig, outline, deckContent, 
+const router = useRouter()
+
+const {
+  busy, err, currentStep, needUserInput, questions, answers,
+  teachingRequest, styleConfig, styleSamples, outline, deckContent, sessionId,
   reset, runWorkflow,
   // V3: 缓存相关
-  stepCache, loadFromCache, hasCache 
+  stepCache, loadFromCache, hasCache,
+  // V3.1: 增强缓存恢复
+  getCachedSessionId, hasCachedSession, restoreFromCacheUpTo
 } = useWorkflow()
 
 // V3: 缓存加载状态
@@ -152,22 +165,20 @@ const cacheLoaded = ref(false)
 // V3: 处理使用缓存的事件
 function handleUseCache(stepId) {
   console.log('[Module34] 使用缓存:', stepId)
-  
+
+  // 恢复缓存的sessionId
+  const cachedSid = getCachedSessionId()
+  if (cachedSid) {
+    sessionId.value = cachedSid
+    console.log('[Module34] 恢复sessionId:', cachedSid)
+  }
+
   // 加载所有前置步骤的缓存
   if (stepId === '3.1' && hasCache('3.1')) {
     teachingRequest.value = loadFromCache('3.1')
     currentStep.value = '✅ 已加载 3.1 缓存'
   }
-  
-  if (stepId === '3.2' && hasCache('3.2')) {
-    if (hasCache('3.1')) {
-      teachingRequest.value = loadFromCache('3.1')
-    }
-    const cache32 = loadFromCache('3.2')
-    styleConfig.value = cache32.styleConfig
-    currentStep.value = '✅ 已加载 3.1+3.2 缓存'
-  }
-  
+
   if (stepId === '3.3' && hasCache('3.3')) {
     // 加载完整的前置缓存链: 3.1 + 3.2 + 3.3
     if (hasCache('3.1')) {
@@ -176,10 +187,29 @@ function handleUseCache(stepId) {
     if (hasCache('3.2')) {
       const cache32 = loadFromCache('3.2')
       styleConfig.value = cache32.styleConfig
+      styleSamples.value = cache32.styleSamples || []
     }
     outline.value = loadFromCache('3.3')
     cacheLoaded.value = true
     currentStep.value = '✅ 已加载 3.1+3.2+3.3 缓存，可直接生成内容'
+  }
+
+  // 支持直接加载3.4缓存
+  if (stepId === '3.4' && hasCache('3.4')) {
+    // 加载完整缓存链
+    if (hasCache('3.1')) {
+      teachingRequest.value = loadFromCache('3.1')
+    }
+    if (hasCache('3.2')) {
+      const cache32 = loadFromCache('3.2')
+      styleConfig.value = cache32.styleConfig
+      styleSamples.value = cache32.styleSamples || []
+    }
+    if (hasCache('3.3')) {
+      outline.value = loadFromCache('3.3')
+    }
+    deckContent.value = loadFromCache('3.4')
+    currentStep.value = '✅ 已加载完整缓存（3.1-3.4），可直接进入渲染'
   }
 }
 
@@ -221,6 +251,11 @@ async function submitAnswers(useDefaults) {
   } catch (e) {
     err.value = e.message
   }
+}
+
+// 跳转到3.5渲染页面
+function goToRender() {
+  router.push('/3.5')
 }
 </script>
 
@@ -560,4 +595,24 @@ async function submitAnswers(useDefaults) {
 .progress { margin-top: var(--spacing-3); color: var(--color-module); font-weight: var(--font-weight-semibold); animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 .err { margin-top: var(--spacing-3); color: var(--color-error); font-weight: var(--font-weight-semibold); }
+
+/* 继续到3.5的按钮样式 */
+.continue-section {
+  margin-top: var(--spacing-6);
+  padding-top: var(--spacing-6);
+  border-top: 2px dashed var(--border-light);
+  text-align: center;
+}
+
+.continue-hint {
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+  margin-bottom: var(--spacing-4);
+}
+
+.continue-btn {
+  font-size: var(--font-size-lg);
+  padding: var(--spacing-3) var(--spacing-6);
+  min-width: 200px;
+}
 </style>

@@ -20,6 +20,7 @@ from .common import (
     WorkflowRunRequest,
     WorkflowRunResponse,
 )
+from .common.security import validate_session_id
 from .orchestrator import WorkflowEngine
 from .common import (
     LLMClient,
@@ -46,7 +47,10 @@ app = FastAPI(title="PPT Outline Workflow (3.1-3.4)")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    # SECURITY WARNING: allow_origins=["*"] is unsafe for production.
+    # It allows any website to make requests to your API.
+    # In production, specify the exact frontend domain(s), e.g., ["https://my-ppt-app.com"]
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=[
         "GET",
@@ -120,13 +124,15 @@ async def run_workflow(req: WorkflowRunRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.emit(req.session_id, "system", "error", {"error": str(e)})
+        # Try to get session_id from state if available, otherwise fallback
+        sid = state.session_id if "state" in locals() and state else (req.session_id or "unknown")
+        logger.emit(sid, "system", "error", {"error": str(e)})
         return WorkflowRunResponse(
-            session_id=req.session_id,
+            session_id=sid,
             status="error",
             stage=state.stage if "state" in locals() and state else "3.1",
             message=str(e),
-            logs_preview=logger.preview(req.session_id),
+            logs_preview=logger.preview(sid),
         )
 
     # Choose stage for response
@@ -135,12 +141,12 @@ async def run_workflow(req: WorkflowRunRequest):
     if status == "need_user_input":
         # If we are asking goals only, keep stage at 3.1
         return WorkflowRunResponse(
-            session_id=req.session_id,
+            session_id=state.session_id,
             status="need_user_input",
             stage="3.1",
             questions=questions,
             teaching_request=state.teaching_request,
-            logs_preview=logger.preview(req.session_id),
+            logs_preview=logger.preview(state.session_id),
             message="需要补充信息后才能继续。",
         )
 
@@ -155,7 +161,7 @@ async def run_workflow(req: WorkflowRunRequest):
         message = "已生成到模块3.1：意图理解。"
 
     return WorkflowRunResponse(
-        session_id=req.session_id,
+        session_id=state.session_id,
         status="ok",
         stage=stage,
         teaching_request=state.teaching_request,
@@ -164,7 +170,7 @@ async def run_workflow(req: WorkflowRunRequest):
         outline=state.outline,
         deck_content=state.deck_content,
         render_result=state.render_result,
-        logs_preview=logger.preview(req.session_id),
+        logs_preview=logger.preview(state.session_id),
         message=message,
     )
 
@@ -179,6 +185,7 @@ def get_session(session_id: str):
 
 @app.get("/api/logs/{session_id}", response_class=PlainTextResponse)
 def get_logs(session_id: str):
+    validate_session_id(session_id)
     return logger.read_all(session_id)
 
 

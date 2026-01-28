@@ -37,7 +37,44 @@
           {{ tc.label }}
         </button>
       </div>
+    </section>
 
+    <!-- 模板选择区 -->
+    <section class="glass-card">
+      <h3 class="card-title">
+        <span class="icon">🎨</span>
+        选择设计模板
+      </h3>
+      <p class="template-hint">根据教学场景选择合适的模板风格，系统会自动推荐最佳选项</p>
+
+      <div class="templates-grid">
+        <div
+          v-for="tpl in templates"
+          :key="tpl.id"
+          class="template-card"
+          :class="{ active: selectedTemplate === tpl.id }"
+          @click="selectedTemplate = tpl.id"
+        >
+          <div class="tpl-preview" :style="{ background: tpl.previewColor }">
+            <span class="tpl-icon">{{ tpl.icon }}</span>
+          </div>
+          <div class="tpl-info">
+            <div class="tpl-name">{{ tpl.name }}</div>
+            <div class="tpl-desc">{{ tpl.desc }}</div>
+            <div class="tpl-scene">适用于：{{ tpl.scene }}</div>
+          </div>
+          <div class="active-badge" v-if="selectedTemplate === tpl.id">✓</div>
+        </div>
+      </div>
+
+      <div class="auto-select-hint" v-if="!selectedTemplate">
+        <span class="hint-icon">💡</span>
+        <span>未选择模板时，系统将根据教学场景自动推荐</span>
+      </div>
+    </section>
+
+    <!-- 按钮区 -->
+    <section class="glass-card">
       <div class="btn-group">
         <button class="btn btn-primary hover-lift" @click="runIntent" :disabled="busy || !rawText.trim()">
           <span v-if="busy" class="spinner-sm"></span>
@@ -106,10 +143,47 @@ const {
 
 const testCaseList = testCases
 const rawText = ref('')
+const selectedTemplate = ref(null)
+
+// 模板配置
+const templates = [
+  {
+    id: 'theory_clean',
+    name: '理论课风格',
+    desc: '简洁清晰，重点突出',
+    scene: '理论讲解、概念教学',
+    icon: '📚',
+    previewColor: 'linear-gradient(135deg, #3D5A80 0%, #5B8DB8 100%)'
+  },
+  {
+    id: 'practice_steps',
+    name: '实训课风格',
+    desc: '步骤清晰，操作引导',
+    scene: '实操训练、技能培养',
+    icon: '🔧',
+    previewColor: 'linear-gradient(135deg, #2D6A4F 0%, #52B788 100%)'
+  },
+  {
+    id: 'review_mindmap',
+    name: '复习课风格',
+    desc: '结构化梳理，思维导图',
+    scene: '复习回顾、知识整合',
+    icon: '🧠',
+    previewColor: 'linear-gradient(135deg, #5C4B7D 0%, #7E6BA8 100%)'
+  }
+]
 
 async function runIntent() {
   try {
-    await runWorkflow({ user_text: rawText.value, stop_at: '3.1' })
+    const params = {
+      user_text: rawText.value,
+      stop_at: '3.1'
+    }
+    // 如果用户选择了模板，传递 style_name
+    if (selectedTemplate.value) {
+      params.style_name = selectedTemplate.value
+    }
+    await runWorkflow(params)
   } catch (e) {
     err.value = e.message
   }
@@ -117,12 +191,17 @@ async function runIntent() {
 
 async function submitAnswers(useDefaults) {
   try {
-    await runWorkflow({
+    const params = {
       user_text: rawText.value,
       answers: useDefaults ? {} : answers,
       auto_fill_defaults: useDefaults,
       stop_at: '3.1'
-    })
+    }
+    // 如果用户选择了模板，传递 style_name
+    if (selectedTemplate.value) {
+      params.style_name = selectedTemplate.value
+    }
+    await runWorkflow(params)
   } catch (e) {
     err.value = e.message
   }
@@ -382,5 +461,111 @@ async function submitAnswers(useDefaults) {
   border-radius: var(--radius-md);
   color: var(--color-error);
   font-weight: var(--font-weight-medium);
+}
+
+/* 模板选择区域 */
+.template-hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-4);
+}
+
+.templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-4);
+}
+
+.template-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  overflow: hidden;
+}
+
+.template-card:hover {
+  border-color: var(--color-brand);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -4px rgba(0,0,0,0.1);
+}
+
+.template-card.active {
+  border-color: var(--color-brand);
+  background: var(--color-brand-light);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring-color);
+}
+
+.tpl-preview {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tpl-icon {
+  font-size: 2rem;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.tpl-info {
+  padding: var(--spacing-3) var(--spacing-4);
+}
+
+.tpl-name {
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
+}
+
+.tpl-desc {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-2);
+}
+
+.tpl-scene {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+.active-badge {
+  position: absolute;
+  top: var(--spacing-2);
+  right: var(--spacing-2);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  color: var(--text-inverse);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.auto-select-hint {
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3) var(--spacing-4);
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.hint-icon {
+  font-size: 1.2em;
 }
 </style>

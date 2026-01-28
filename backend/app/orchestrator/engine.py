@@ -1025,6 +1025,10 @@ class WorkflowEngine:
           status: "ok" | "need_user_input"
         """
 
+        if session_id is None:
+            import uuid
+            session_id = uuid.uuid4().hex
+
         state = self.store.load(session_id) or self.store.create(session_id)
 
         # --- Stage 3.1 ---
@@ -1210,76 +1214,59 @@ class WorkflowEngine:
         if stop_at == "3.1":
             return state, "ok", []
 
-        # --- Stage 3.2 ---
-        # Skip 3.2 if style_name is provided (test mode: 3.1->3.3)
-        skip_3_2 = style_name is not None
+        # --- Stage 3.2 (自动执行，无交互) ---
+        # 已删除3.2交互流程，直接基于TeachingRequest自动生成StyleConfig
+        if state.style_config is None:
+            # 使用 TeachingRequest 中的 style_name（在3.1中自动设置或用户指定）
+            # 如果前端传入了 style_name 参数，优先使用（兼容旧接口）
+            final_style_name = style_name or state.teaching_request.style_name
+            if final_style_name:
+                # 临时设置 style_name 以便 choose_style 使用正确的模板
+                state.teaching_request.style_name = final_style_name
 
-        if not skip_3_2 and state.style_config is None:
-            # 完整流程模式：执行3.2风格设计模块
-            self.logger.emit(session_id, "3.2", "start", {"mode": "full_workflow"})
-            cfg, samples = await self._design_style(session_id, state.teaching_request)
+            self.logger.emit(session_id, "3.2", "auto_generate", {
+                "mode": "auto",
+                "style_name": final_style_name or "auto_from_teaching_scene",
+                "teaching_scene": state.teaching_request.teaching_scene,
+                "professional_category": state.teaching_request.professional_category,
+            })
+
+            # 自动生成 StyleConfig（无LLM交互，纯规则生成）
+            cfg = choose_style(state.teaching_request)
+            samples = build_style_samples(state.teaching_request, cfg)
+
             state.style_config = cfg
             state.style_samples = samples
             state.stage = "3.2"
             self.store.save(state)
+
             self.logger.emit(
                 session_id,
                 "3.2",
-                "complete",
-                {"style_name": cfg.style_name, "mode": "full_workflow"},
+                "auto_complete",
+                {"style_name": cfg.style_name, "mode": "auto"},
             )
 
-            # 完整流程模式：如果stop_at='3.3'，3.2完成后先返回，让前端展示3.2的结果
-            # 这样用户可以查看风格配置，然后再继续到3.3
-            if stop_at == "3.3" and state.outline is None:
-                return state, "ok", []
-
-        # Check if we should stop at 3.2
+        # 保留 stop_at="3.2" 兼容性（虽然3.2已自动化，但可能仍有调用）
         if stop_at == "3.2":
             return state, "ok", []
 
         # --- Stage 3.3 ---
         if state.outline is None:
-            # 完整流程模式：使用3.2生成的style_config
-            # 跳过3.2模式：直接使用传入的style_name
-            if skip_3_2:
-                # 测试模式 3.1->3.3：跳过3.2，直接使用style_name
-                self.logger.emit(
-                    session_id,
-                    "3.3",
-                    "start",
-                    {"mode": "skip_3_2", "style_name": style_name},
-                )
-                outline = await self._generate_outline(
-                    session_id, state.teaching_request, style_name=style_name
-                )
-            else:
-                # 完整流程模式 3.1->3.2->3.3：使用3.2生成的style_config
-                if state.style_config is None:
-                    # 理论上不应该发生，但如果发生则记录警告并使用降级逻辑
-                    self.logger.emit(
-                        session_id,
-                        "3.3",
-                        "warning",
-                        {
-                            "message": "style_config is None in full workflow, falling back to teaching_scene inference",
-                            "mode": "full_workflow",
-                        },
-                    )
-                else:
-                    self.logger.emit(
-                        session_id,
-                        "3.3",
-                        "start",
-                        {
-                            "mode": "full_workflow",
-                            "style_name": state.style_config.style_name,
-                            "style_config_available": True,
-                        },
-                    )
-                outline = await self._generate_outline(
-                    session_id, state.teaching_request, style_config=state.style_config
-                )
+            # 使用自动生成的 style_config
+            self.logger.emit(
+                session_id,
+                "3.3",
+                "start",
+                {
+                    "mode": "auto_style",
+                    "style_name": state.style_config.style_name,
+                    "style_config_available": True,
+                },
+            )
+            outline = await self._generate_outline(
+                session_id, state.teaching_request, style_config=state.style_config
+            )
             state.outline = outline
             state.stage = "3.3"
             self.store.save(state)

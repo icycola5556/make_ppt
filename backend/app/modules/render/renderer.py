@@ -32,7 +32,11 @@ class HTMLRenderer:
         """渲染主入口"""
         
         # 1. 准备 Jinja2
-        env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+        # SECURITY: Enable autoescape to prevent XSS/SSTI
+        env = Environment(
+            loader=FileSystemLoader(str(TEMPLATE_DIR)),
+            autoescape=True
+        )
         
         slides_data = []
         all_image_slots = []

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from .schemas import SessionState
+from .security import validate_session_id
 
 
 class SessionStore:
