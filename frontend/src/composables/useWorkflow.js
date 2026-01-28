@@ -61,11 +61,18 @@ const stepCache = reactive({
     '3.4': null,  // SlideDeckContent
 })
 
-// 保存步骤结果到缓存
-function saveToCache(step, data) {
+// 缓存的会话ID（用于恢复会话）
+const cachedSessionId = ref('')
+
+// 保存步骤结果到缓存（同时保存sessionId）
+function saveToCache(step, data, currentSessionId = null) {
     if (['3.1', '3.2', '3.3', '3.4'].includes(step)) {
         stepCache[step] = JSON.parse(JSON.stringify(data)) // 深拷贝
-        console.log(`[缓存] 已保存 ${step} 结果`, stepCache[step])
+        // 同时保存当前的sessionId
+        if (currentSessionId) {
+            cachedSessionId.value = currentSessionId
+        }
+        console.log(`[缓存] 已保存 ${step} 结果, sessionId: ${cachedSessionId.value}`, stepCache[step])
     }
 }
 
@@ -74,9 +81,19 @@ function loadFromCache(step) {
     return stepCache[step]
 }
 
+// 获取缓存的sessionId
+function getCachedSessionId() {
+    return cachedSessionId.value
+}
+
 // 检查是否有缓存
 function hasCache(step) {
     return stepCache[step] !== null
+}
+
+// 检查是否有可用的缓存会话
+function hasCachedSession() {
+    return cachedSessionId.value && cachedSessionId.value.length > 0
 }
 
 // 清空指定步骤及其后续步骤的缓存
@@ -88,6 +105,40 @@ function clearCacheFrom(step) {
             stepCache[steps[i]] = null
         }
     }
+    // 如果清空3.1，同时清空cachedSessionId
+    if (step === '3.1') {
+        cachedSessionId.value = ''
+    }
+}
+
+// 恢复缓存的会话状态（用于从缓存继续）
+function restoreFromCacheUpTo(targetStep) {
+    const result = {
+        sessionId: cachedSessionId.value,
+        teachingRequest: null,
+        styleConfig: null,
+        styleSamples: [],
+        outline: null,
+        deckContent: null
+    }
+
+    // 按顺序加载缓存数据
+    if (hasCache('3.1')) {
+        result.teachingRequest = loadFromCache('3.1')
+    }
+    if (hasCache('3.2')) {
+        const cache32 = loadFromCache('3.2')
+        result.styleConfig = cache32.styleConfig
+        result.styleSamples = cache32.styleSamples || []
+    }
+    if (targetStep >= '3.3' && hasCache('3.3')) {
+        result.outline = loadFromCache('3.3')
+    }
+    if (targetStep >= '3.4' && hasCache('3.4')) {
+        result.deckContent = loadFromCache('3.4')
+    }
+
+    return result
 }
 
 // 获取缓存摘要（用于UI展示）
@@ -427,19 +478,19 @@ export function useWorkflow() {
                 outline.value = res.outline || null
                 deckContent.value = res.deck_content || null
 
-                // V3: 自动保存到缓存
+                // V3: 自动保存到缓存（同时保存sessionId）
                 const completedStage = res.stage || stop_at
                 if (res.teaching_request) {
-                    saveToCache('3.1', res.teaching_request)
+                    saveToCache('3.1', res.teaching_request, sessionId.value)
                 }
                 if (res.style_config) {
-                    saveToCache('3.2', { styleConfig: res.style_config, styleSamples: res.style_samples || [] })
+                    saveToCache('3.2', { styleConfig: res.style_config, styleSamples: res.style_samples || [] }, sessionId.value)
                 }
                 if (res.outline) {
-                    saveToCache('3.3', res.outline)
+                    saveToCache('3.3', res.outline, sessionId.value)
                 }
                 if (res.deck_content) {
-                    saveToCache('3.4', res.deck_content)
+                    saveToCache('3.4', res.deck_content, sessionId.value)
                 }
 
                 // 获取最新的session状态
@@ -548,5 +599,9 @@ export function useWorkflow() {
         hasCache,
         clearCacheFrom,
         getCacheSummary,
+        // V3.1: 增强缓存恢复
+        getCachedSessionId,
+        hasCachedSession,
+        restoreFromCacheUpTo,
     }
 }

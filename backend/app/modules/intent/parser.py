@@ -508,6 +508,28 @@ def _assess_teaching_scene(user_text: str, knowledge_points: List[KnowledgePoint
 
 
 # ============================================================================
+# Style Name Auto-Selection (从3.2迁移)
+# ============================================================================
+
+def select_style_name_by_scene(scene: str) -> str:
+    """根据教学场景自动选择风格模板名称。
+
+    Args:
+        scene: 教学场景类型 ("theory", "practice", "review", "unknown")
+
+    Returns:
+        风格模板名称 ("theory_clean", "practice_steps", "review_mindmap")
+    """
+    if scene == "practice":
+        return "practice_steps"
+    elif scene == "review":
+        return "review_mindmap"
+    else:
+        # theory 或 unknown 默认使用理论课风格
+        return "theory_clean"
+
+
+# ============================================================================
 # Heuristic Parser (Enhanced)
 # ============================================================================
 
@@ -606,10 +628,13 @@ def heuristic_parse(user_text: str) -> TeachingRequest:
         raw_input=user_text,
         parsing_method="heuristic"
     )
-    
+
     # Initialize distribution
     update_page_distribution(req)
-    
+
+    # Auto-select style_name based on teaching scene (从3.2迁移)
+    req.style_name = select_style_name_by_scene(scene)
+
     return req
 
 
@@ -945,6 +970,8 @@ def validate_and_build_questions(req: TeachingRequest) -> Tuple[List[Question], 
             if recommended_count and explanation:
                 # 使用LLM推荐结果
                 question_text = f"""⚠️ 页面数量冲突检测
+
+
 
 您期望的页数：{req.slide_requirements.target_count} 页
 系统建议的最小页数：{req.slide_requirements.min_count} 页
@@ -1321,7 +1348,17 @@ def apply_user_answers(req: TeachingRequest, answers: Dict[str, Any]) -> Teachin
             else:
                 # 返回修改，回到 adjust_configurations 阶段
                 req.interaction_stage = "adjust_configurations"
-    
+
+    # ===== 处理 style_name 覆盖（从3.2迁移，任何阶段都可以设置）=====
+    if "style_name" in answers and answers["style_name"]:
+        style_name_val = str(answers["style_name"]).strip()
+        if style_name_val in ["theory_clean", "practice_steps", "review_mindmap"]:
+            req.style_name = style_name_val
+
+    # 确保 style_name 有值（如果用户没有设置，基于 teaching_scene 自动选择）
+    if not req.style_name:
+        req.style_name = select_style_name_by_scene(req.teaching_scenario.scene_type)
+
     return req
 
 

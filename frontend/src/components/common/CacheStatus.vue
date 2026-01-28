@@ -51,9 +51,9 @@ defineEmits(['use-cache', 'clear-cache'])
 
 const { stepCache, hasCache, getCacheSummary, clearCacheFrom } = useWorkflow()
 
+// 注意：3.2 风格设计已移除，功能已合并到 3.1 意图识别
 const steps = [
   { id: '3.1', name: '意图理解' },
-  { id: '3.2', name: '风格设计' },
   { id: '3.3', name: '大纲生成' },
   { id: '3.4', name: '内容生成' },
 ]
@@ -66,12 +66,10 @@ function getCacheInfo(stepId) {
   const summary = getCacheSummary()
   const info = summary[stepId]
   if (!info) return ''
-  
+
   switch (stepId) {
     case '3.1':
       return `${info.subject || '未知课程'} (${info.kpCount}个知识点, ${info.slideCount}页)`
-    case '3.2':
-      return info.styleName || '已配置'
     case '3.3':
       return `${info.title || '大纲'} (${info.slideCount}页)`
     case '3.4':

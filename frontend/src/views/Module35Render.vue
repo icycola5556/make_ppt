@@ -139,6 +139,7 @@
 <script>
 import { ref, onMounted, computed } from 'vue'
 import { api } from '../api'
+import { useWorkflow } from '../composables/useWorkflow'
 
 export default {
   name: 'Module35Render',
@@ -159,10 +160,14 @@ export default {
     const mockSubject = ref('mechanical')
     let pollTimer = null
 
-    // 从URL参数或props获取sessionId
+    // 使用useWorkflow获取缓存
+    const { getCachedSessionId, hasCachedSession, hasCache } = useWorkflow()
+
+    // 从URL参数、props或缓存获取sessionId
     const getSessionId = () => {
       const urlParams = new URLSearchParams(window.location.search)
-      return urlParams.get('session_id') || props.initialSessionId
+      // 优先级：URL参数 > props > 缓存
+      return urlParams.get('session_id') || props.initialSessionId || getCachedSessionId()
     }
 
     const startPolling = (sid) => {
@@ -364,19 +369,31 @@ export default {
 
     onMounted(() => {
       const urlParams = new URLSearchParams(window.location.search)
-      const sid = urlParams.get('session_id') || props.initialSessionId
+      // 优先从URL获取，然后从props，最后从缓存
+      let sid = urlParams.get('session_id') || props.initialSessionId
       const shouldAutoRun = urlParams.get('auto_run') === 'true'
+
+      // 如果URL和props都没有sessionId，尝试从缓存获取
+      if (!sid && hasCachedSession()) {
+        sid = getCachedSessionId()
+        console.log('[Module35] 从缓存恢复sessionId:', sid)
+        // 更新URL以便刷新后保持状态
+        if (sid) {
+          const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + `?session_id=${sid}`;
+          window.history.replaceState({path: newUrl}, '', newUrl);
+        }
+      }
 
       if (sid) {
         sessionId.value = sid
-        
+
         // ✅ 新增：如果检测到自动运行标记，且没有正在加载，则自动触发
         if (shouldAutoRun && !loading.value) {
           console.log('Auto-running workflow based on URL param...')
           // 清除 URL 中的 auto_run 参数，防止刷新页面重复触发
           const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + `?session_id=${sid}`;
           window.history.replaceState({path: newUrl}, '', newUrl);
-          
+
           // 触发正常渲染流程
           runFullWorkflow()
         }

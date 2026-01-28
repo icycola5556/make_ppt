@@ -30,26 +30,10 @@
         </button>
       </div>
       
-      <!-- 模式选择 -->
-      <div class="mode-select">
-        <label class="mode-option">
-          <input type="radio" v-model="skipStyle" :value="false" />
-          <span>完整流程 (3.1→3.2→3.3)</span>
-        </label>
-        <label class="mode-option">
-          <input type="radio" v-model="skipStyle" :value="true" />
-          <span>跳过3.2 (3.1→3.3)</span>
-        </label>
-      </div>
-
-      <!-- style_name输入（跳过3.2时） -->
-      <div v-if="skipStyle" class="style-name-input">
-        <label>Style Name:</label>
-        <select class="input select" v-model="styleName">
-          <option v-for="s in availableStyles" :key="s.value" :value="s.value">
-            {{ s.label }}
-          </option>
-        </select>
+      <!-- 流程说明 -->
+      <div class="flow-info">
+        <span class="flow-badge">流程</span>
+        <span>3.1 意图识别（含模板选择）→ 3.3 大纲生成</span>
       </div>
       
       <div class="row">
@@ -88,14 +72,13 @@
       <JsonBlock title="teaching_request.json" :value="teachingRequest" collapsed />
     </section>
 
-    <!-- 风格配置结果（非跳过模式）- 完整交互功能 -->
-    <!-- 显示条件：有styleConfig且未跳过3.2 -->
-    <section v-if="currentStyleConfig && !skipStyle" class="glass-card highlight">
+    <!-- 风格配置结果（自动生成，仅展示） -->
+    <section v-if="currentStyleConfig" class="glass-card highlight">
       <div class="h3">
         <span class="icon">🎨</span>
-        3.2 风格配置结果
+        风格配置（自动生成）
       </div>
-      
+
       <div class="style-info" v-if="currentStyleConfig">
         <div class="info-item">
           <span class="label">风格名称：</span>
@@ -110,205 +93,19 @@
           <span class="value">{{ currentStyleConfig.layout?.density }}</span>
         </div>
       </div>
-      
-      <!-- 大模型的选择理由或设计思路 -->
-      <div v-if="styleReasoning" class="reasoning-box">
-        <div class="reasoning-header">
-          <span class="reasoning-icon">🤖</span>
-          <span class="reasoning-title">AI 设计理由</span>
-        </div>
-        <div class="reasoning-content">{{ styleReasoning }}</div>
-      </div>
 
-      <!-- 风格预览 -->
-      <div class="h4">配色方案</div>
-      <div class="style-preview" v-if="currentStyleConfig?.color">
-        <div class="color-palette-grid">
-          <!-- 主色系 -->
-          <div class="palette-row">
-            <div class="color-group-label" :style="{color: currentStyleConfig.color.muted}">品牌色系</div>
-            <div class="color-item large" :style="{ background: currentStyleConfig.color.primary, color: getTextColor(currentStyleConfig.color.primary) }">
-                <span class="color-label">主色 Primary</span>
-                <span class="color-value">{{ currentStyleConfig.color.primary }}</span>
-            </div>
-            <div class="color-item" :style="{ background: currentStyleConfig.color.secondary, color: getTextColor(currentStyleConfig.color.secondary) }">
-                <span class="color-label">辅助 Secondary</span>
-                <span class="color-value">{{ currentStyleConfig.color.secondary }}</span>
-            </div>
-             <div class="color-item" :style="{ background: currentStyleConfig.color.accent, color: getTextColor(currentStyleConfig.color.accent) }">
-                <span class="color-label">强调 Accent</span>
-                <span class="color-value">{{ currentStyleConfig.color.accent }}</span>
-            </div>
-          </div>
-
-          <!-- 功能色系 -->
-           <div class="palette-row">
-             <div class="color-group-label" :style="{color: currentStyleConfig.color.muted}">功能色系</div>
-             <div class="color-item" :style="{ background: currentStyleConfig.color.text, color: getTextColor(currentStyleConfig.color.text) }">
-                <span class="color-label">文本 Text</span>
-                <span class="color-value">{{ currentStyleConfig.color.text }}</span>
-            </div>
-             <div class="color-item" :style="{ background: currentStyleConfig.color.muted, color: getTextColor(currentStyleConfig.color.muted) }">
-                <span class="color-label">弱化 Muted</span>
-                <span class="color-value">{{ currentStyleConfig.color.muted }}</span>
-            </div>
-             <div class="color-item" :style="{ background: currentStyleConfig.color.warning, color: getTextColor(currentStyleConfig.color.warning) }">
-                <span class="color-label">警示 Warning</span>
-                <span class="color-value">{{ currentStyleConfig.color.warning }}</span>
-            </div>
-          </div>
-
-          <!-- 背景色系 -->
-           <div class="palette-row">
-             <div class="color-group-label" :style="{color: currentStyleConfig.color.muted}">背景色系</div>
-             <div class="color-item" :style="{ background: currentStyleConfig.color.background, color: getTextColor(currentStyleConfig.color.background), border: '1px solid #eee' }">
-                <span class="color-label">背景 Bkg</span>
-                <span class="color-value">{{ currentStyleConfig.color.background }}</span>
-            </div>
-             <div class="color-item" :style="{ background: currentStyleConfig.color.surface || '#fff', color: getTextColor(currentStyleConfig.color.surface || '#fff'), border: '1px solid #eee' }">
-                <span class="color-label">卡片 Surface</span>
-                <span class="color-value">{{ currentStyleConfig.color.surface || '-' }}</span>
-            </div>
-            <div class="color-item wide" v-if="currentStyleConfig.color.background_gradient" :style="{ background: currentStyleConfig.color.background_gradient, color: '#000' }">
-                <span class="color-label">渐变 Gradient</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 组件应用预览 -->
-        <div class="usage-showcase glass-card" :style="{ background: currentStyleConfig.color.background, fontFamily: currentStyleConfig.font.body_family }">
-            <div class="showcase-label" :style="{ color: currentStyleConfig.color.muted }">组件应用预览</div>
-            <div class="showcase-row">
-                <!-- 1. 卡片与文本层次 -->
-                <div class="preview-card card-tilted" :style="{ 
-                    background: currentStyleConfig.color.surface || '#fff', 
-                    color: currentStyleConfig.color.text,
-                    borderRadius: currentStyleConfig.layout?.border_radius || '0px',
-                    boxShadow: getShadowStyle(currentStyleConfig.layout?.box_shadow)
-                }">
-                    <div class="pc-head" :style="{ color: currentStyleConfig.color.primary, fontFamily: currentStyleConfig.font.title_family }">Card Title</div>
-                    <div class="pc-body">Normal text content example.</div>
-                    <div class="pc-muted" :style="{ color: currentStyleConfig.color.muted }">Muted info: Secondary text with lower contrast.</div>
-                </div>
-
-                <!-- 2. 状态提示 -->
-                <div class="preview-group">
-                    <div class="preview-alert" :style="{ 
-                        background: currentStyleConfig.color.warning, 
-                        color: '#fff',
-                        borderRadius: currentStyleConfig.layout?.border_radius || '0px'
-                    }">
-                        <span class="icon">⚠️</span> Warning / Alert Message
-                    </div>
-                    <div class="preview-btn pulse-accent" :style="{ 
-                        background: currentStyleConfig.color.accent, 
-                        color: '#fff',
-                        borderRadius: currentStyleConfig.layout?.border_radius || '0px'
-                    }">
-                        Accent Button
-                    </div>
-                </div>
-            </div>
-        </div>
-      </div>
-      
-      <!-- 风格微调交互区 (Style Refinement) -->
-      <div class="refine-section" v-if="currentStyleConfig">
-        <div class="h4">
-          <span>✨ 风格微调 (AI Designer)</span>
-          <div class="tooltip-container">
-            <span class="tooltip-icon">💡 支持修改项</span>
-            <div class="tooltip-content">
-              <ul>
-                <li><strong>色彩:</strong> "换个暖色调", "背景深一点", "主色改成#ff0000"</li>
-                <li><strong>字体:</strong> "标题用黑体", "正文大一点"</li>
-                <li><strong>布局:</strong> "更宽松一点", "卡片圆角大一点"</li>
-                <li><strong>风格:</strong> "赛博朋克风", "极简风格"</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        
-        <div class="refine-box glass-card" style="padding: var(--spacing-4); border: 1px solid var(--color-brand-light)">
-          <textarea 
-            class="refine-input hover-lift" 
-            v-model="refineText" 
-            placeholder="对当前风格不满意？试试告诉我：'换个更有科技感的配色' 或 '标题字号加大'..."
-            :disabled="refineBusy"
-            @keydown.enter.ctrl.prevent="handleRefine"
-          ></textarea>
-          
-          <div class="refine-actions">
-            <div class="history-actions">
-              <button class="icon-btn" @click="undoStyle" :disabled="styleHistory.length === 0" title="撤销 (Undo)">
-                ↩️ 撤销
-              </button>
-            </div>
-            <button class="primary-btn hover-lift" @click="handleRefine" :disabled="refineBusy || !refineText.trim()">
-              {{ refineBusy ? '调整中...' : '✨ 确认调整' }}
-            </button>
-          </div>
+      <!-- 配色预览（简化版） -->
+      <div class="style-preview-simple" v-if="currentStyleConfig?.color">
+        <div class="color-row">
+          <div class="color-chip" :style="{ background: currentStyleConfig.color.primary }" :title="'主色: ' + currentStyleConfig.color.primary"></div>
+          <div class="color-chip" :style="{ background: currentStyleConfig.color.secondary }" :title="'辅助色: ' + currentStyleConfig.color.secondary"></div>
+          <div class="color-chip" :style="{ background: currentStyleConfig.color.accent }" :title="'强调色: ' + currentStyleConfig.color.accent"></div>
+          <div class="color-chip" :style="{ background: currentStyleConfig.color.text }" :title="'文本色: ' + currentStyleConfig.color.text"></div>
+          <div class="color-chip" :style="{ background: currentStyleConfig.color.background, border: '1px solid #ddd' }" :title="'背景色: ' + currentStyleConfig.color.background"></div>
         </div>
       </div>
 
-      <!-- 警告确认弹窗 -->
-      <div v-if="showRefineWarning" class="modal-overlay">
-        <div class="modal glass-card">
-          <div class="modal-header warning">⚠️ 风格调整警告</div>
-          <div class="modal-body">
-            <p>AI 检测到调整后的风格存在潜在问题：</p>
-            <ul>
-              <li v-for="(w, i) in refineWarnings" :key="i">{{ w }}</li>
-            </ul>
-            <p>这可能会影响演示文稿的可读性。是否仍要应用此修改？</p>
-          </div>
-          <div class="modal-footer">
-            <button class="btn" @click="cancelRefine">取消修改</button>
-            <button class="btn danger" @click="confirmRefine">确认应用 (风险)</button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 样例幻灯片 -->
-      <div v-if="currentStyleSamples && currentStyleSamples.length" class="samples-section">
-        <div class="h4">样例幻灯片预览</div>
-        <div class="samples-grid">
-          <div class="sample-slide" v-for="(slide, idx) in currentStyleSamples" :key="idx"
-               :style="{ 
-                 background: currentStyleConfig.color.background,
-                 color: currentStyleConfig.color.text,
-                 fontFamily: currentStyleConfig.font.body_family
-               }">
-            <div class="slide-header" :style="{ borderBottom: `2px solid ${currentStyleConfig.color.primary}` }">
-              <span class="slide-kind">{{ slide.kind }}</span>
-            </div>
-            <div class="slide-title" :style="{ 
-              color: currentStyleConfig.color.primary, 
-              fontFamily: getFontStack(currentStyleConfig.font.title_family),
-              fontSize: `${Math.min(currentStyleConfig.font.title_size / 2.5, 18)}px`
-            }">
-              {{ slide.title }}
-            </div>
-            <ul class="slide-bullets">
-              <li v-for="(bullet, bIdx) in slide.bullets" :key="bIdx">{{ bullet }}</li>
-            </ul>
-            <div class="slide-notes" v-if="slide.notes" :style="{ color: currentStyleConfig.color.muted }">
-              备注: {{ slide.notes }}
-            </div>
-          </div>
-        </div>
-      </div>
-      
       <JsonBlock title="style_config.json" :value="currentStyleConfig" filename="style_config.json" collapsed />
-      
-      <!-- 继续到3.3的按钮（完整流程且3.2已完成但3.3未完成时显示） -->
-      <!-- 显示条件：有styleConfig但没有outline，且stage=3.2（完整流程模式） -->
-      <div v-if="!outline && currentStyleConfig && (sessionState?.stage === '3.2' || (!sessionState && styleConfig)) && !skipStyle" class="continue-section">
-        <div class="continue-hint">✨ 风格配置已生成，可以继续生成大纲</div>
-        <button class="primary continue-btn hover-lift" @click="continueToOutline" :disabled="busy || outlineGenerator.isExpanding.value">
-          {{ (busy || outlineGenerator.isExpanding.value) ? '生成中...' : '继续生成大纲 (3.3)' }}
-        </button>
-      </div>
     </section>
 
     <!-- 大纲结果 -->
@@ -382,12 +179,14 @@ import { api, getApiBase } from '../api'
 
 const router = useRouter()
 
-const { 
-  busy, err, currentStep, needUserInput, questions, answers, 
-  teachingRequest, styleConfig, styleSamples, sessionId, sessionState, outline, 
+const {
+  busy, err, currentStep, needUserInput, questions, answers,
+  teachingRequest, styleConfig, styleSamples, sessionId, sessionState, outline,
   reset, runWorkflow, availableStyles,
   // V3: 缓存相关
-  stepCache, loadFromCache, hasCache 
+  stepCache, loadFromCache, hasCache,
+  // V3.1: 增强缓存恢复
+  getCachedSessionId, hasCachedSession, restoreFromCacheUpTo
 } = useWorkflow()
 
 const outlineGenerator = useOutlineGenerator()
@@ -405,26 +204,26 @@ watch(outline, (newOutline) => {
 })
 
 // V3: 处理使用缓存的事件
+// 标记是否从缓存恢复（用于runOutline判断）
+const cacheRestored = ref(false)
+
 function handleUseCache(stepId) {
   console.log('[Module33] 使用缓存:', stepId)
-  
+
+  // 恢复缓存的sessionId
+  const cachedSid = getCachedSessionId()
+  if (cachedSid) {
+    sessionId.value = cachedSid
+    console.log('[Module33] 恢复sessionId:', cachedSid)
+  }
+
   if (stepId === '3.1' && hasCache('3.1')) {
     // 加载 3.1 缓存到当前状态
     teachingRequest.value = loadFromCache('3.1')
-    currentStep.value = '✅ 已加载 3.1 缓存，可继续执行 3.2 或 3.3'
+    cacheRestored.value = true
+    currentStep.value = '✅ 已加载 3.1 缓存，可继续生成大纲'
   }
-  
-  if (stepId === '3.2' && hasCache('3.2')) {
-    // 加载 3.2 缓存（包含 3.1）
-    if (hasCache('3.1')) {
-      teachingRequest.value = loadFromCache('3.1')
-    }
-    const cache32 = loadFromCache('3.2')
-    styleConfig.value = cache32.styleConfig
-    styleSamples.value = cache32.styleSamples || []
-    currentStep.value = '✅ 已加载 3.1+3.2 缓存，可直接执行 3.3'
-  }
-  
+
   if (stepId === '3.3' && hasCache('3.3')) {
     // 加载 3.3 缓存（包含 3.1+3.2）
     if (hasCache('3.1')) {
@@ -436,53 +235,69 @@ function handleUseCache(stepId) {
       styleSamples.value = cache32.styleSamples || []
     }
     outline.value = loadFromCache('3.3')
+    cacheRestored.value = true
     currentStep.value = '✅ 已加载完整大纲缓存'
   }
 }
 
 const testCaseList = testCases
 const rawText = ref('')
-const skipStyle = ref(false)
-const styleName = ref('theory_clean')
 
 
 async function runOutline() {
     // Clear previous errors/state
     err.value = null
     outline.value = null
-    
+
     try {
         busy.value = true
-        
-        // Check if we need to run 3.1/3.2 first, or just generate outline
-        const needsSetup = !sessionId.value || (!styleConfig.value && !skipStyle.value)
-        
+
+        // 检查是否从缓存恢复（有sessionId和teachingRequest）
+        const hasRestoredFromCache = cacheRestored.value && sessionId.value && teachingRequest.value
+
+        // Check if we need to run 3.1 first
+        const needsSetup = !hasRestoredFromCache && (!sessionId.value || !styleConfig.value)
+
         if (needsSetup) {
             // Need rawText for initial setup
             if (!rawText.value.trim()) {
                 err.value = '请先输入课程需求'
                 return
             }
-            
-            const stopAt = skipStyle.value ? '3.1' : '3.2'
-            
-            // Use composable's runWorkflow which handles session creation
+
+            // 直接执行到3.3（3.2风格自动生成，无交互）
             await runWorkflow({
                 user_text: rawText.value,
                 answers: answers.value,
-                auto_fill_defaults: true, 
-                stop_at: stopAt
+                auto_fill_defaults: true,
+                stop_at: '3.3'
             })
-            
+
             if (needUserInput.value) {
                 busy.value = false
-                return // Wait for user input
+                return // Wait for user input (3.1阶段的问答)
+            }
+        } else if (hasRestoredFromCache && !styleConfig.value) {
+            // 从缓存恢复但没有styleConfig，需要继续执行3.2自动生成
+            currentStep.value = '正在自动生成风格配置...'
+            await runWorkflow({
+                user_text: teachingRequest.value?.parsing_metadata?.raw_input || '',
+                stop_at: '3.3',
+                _continue_to_3_3: true
+            })
+
+            if (needUserInput.value) {
+                busy.value = false
+                return
             }
         }
-        
-        // If we reached here, 3.1/3.2 are done. Start 3.3 parallel generation.
+
+        // If we reached here, 3.1 done and styleConfig auto-generated. Start 3.3 parallel generation.
         await generateParallelOutline()
-        
+
+        // 重置缓存恢复标记
+        cacheRestored.value = false
+
     } catch (e) {
         err.value = e.message
     } finally {
@@ -493,23 +308,23 @@ async function runOutline() {
 async function submitAnswers(useDefaults) {
     try {
         busy.value = true
-        const stopAt = skipStyle.value ? '3.1' : '3.2'
-        
+
+        // 直接执行到3.3（3.2风格自动生成，无交互）
         await runWorkflow({
             user_text: rawText.value,
             answers: useDefaults ? {} : answers.value,
             auto_fill_defaults: useDefaults,
-            stop_at: stopAt
+            stop_at: '3.3'
         })
-        
+
         if (needUserInput.value) {
              busy.value = false
              return // Still need input (e.g. multi-round)
         }
-        
+
         // If Q&A finished, proceed to generation
         await generateParallelOutline()
-        
+
     } catch (e) {
         err.value = e.message
     } finally {
@@ -521,7 +336,7 @@ async function generateParallelOutline() {
     currentStep.value = '阶段 2: 正在生成大纲结构...'
     
     // Call Structure Endpoint
-    const structRes = await api.generateOutlineStructure(sessionId.value, skipStyle.value ? styleName.value : styleConfig.value?.style_name)
+    const structRes = await api.generateOutlineStructure(sessionId.value, styleConfig.value?.style_name)
     
     if (structRes.ok && structRes.outline) {
         outline.value = structRes.outline
@@ -571,14 +386,6 @@ async function continueToOutline() {
 }
 
 // Other existing functions...
-// --- Style Refinement State (3.2交互功能) ---
-const refineText = ref('')
-const refineBusy = ref(false)
-const styleHistory = ref([])  // For undo functionality
-const showRefineWarning = ref(false)
-const refineWarnings = ref([])
-const pendingRefineConfig = ref(null)
-const styleReasoning = ref('')  // 大模型的选择理由或设计思路
 
 // slide_type 数据（从API加载）
 const slideTypesData = ref(null)
@@ -600,12 +407,6 @@ const currentStyleConfig = computed(() => {
   return styleConfig.value || sessionState.value?.style_config || null
 })
 
-// 计算当前的styleSamples（优先使用响应中的，其次使用sessionState中的）
-const currentStyleSamples = computed(() => {
-  return styleSamples.value && styleSamples.value.length > 0 
-    ? styleSamples.value 
-    : (sessionState.value?.style_samples || [])
-})
 
 // 监听sessionState变化，确保styleConfig和styleSamples同步更新
 watch(sessionState, (newState) => {
@@ -681,133 +482,6 @@ function getSlideTypeDescription(type) {
   return slideTypeMap.value[type]?.description || ''
 }
 
-// --- Style Helper Functions (3.2交互功能) ---
-function getTextColor(hexColor) {
-  if (!hexColor || typeof hexColor !== 'string' || !hexColor.startsWith('#')) return '#000'
-  const hex = hexColor.replace('#', '')
-  const r = parseInt(hex.substr(0, 2), 16)
-  const g = parseInt(hex.substr(2, 2), 16)
-  const b = parseInt(hex.substr(4, 2), 16)
-  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000
-  return (yiq >= 128) ? '#000' : '#fff'
-}
-
-function getShadowStyle(shadowType) {
-    if (shadowType === 'soft') return '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-    if (shadowType === 'hard') return '4px 4px 0px 0px rgba(0,0,0,0.2)'
-    return 'none'
-}
-
-// 字体栈映射，确保中文字体有备选方案
-const FONT_STACK_MAP = {
-  '黑体': '"SimHei", "Heiti SC", "Microsoft YaHei", sans-serif',
-  'SimHei': '"SimHei", "Heiti SC", "Microsoft YaHei", sans-serif',
-  '宋体': '"SimSun", "Songti SC", serif',
-  'SimSun': '"SimSun", "Songti SC", serif',
-  '楷体': '"KaiTi", "Kaiti SC", serif',
-  'KaiTi': '"KaiTi", "Kaiti SC", serif',
-  '微软雅黑': '"Microsoft YaHei", "PingFang SC", sans-serif',
-  'Microsoft YaHei': '"Microsoft YaHei", "PingFang SC", sans-serif',
-}
-
-function getFontStack(fontFamily) {
-  if (!fontFamily) return 'sans-serif'
-  return FONT_STACK_MAP[fontFamily] || `"${fontFamily}", sans-serif`
-}
-
-// --- Style Refinement Handlers (3.2交互功能) ---
-async function handleRefine() {
-  if (!refineText.value.trim() || refineBusy.value) return
-  
-  refineBusy.value = true
-  try {
-    // Save current state for undo
-    if (currentStyleConfig.value) {
-      styleHistory.value.push(JSON.parse(JSON.stringify(currentStyleConfig.value)))
-    }
-    
-    const base = getApiBase()
-    const res = await fetch(`${base}/api/workflow/style/refine`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id: sessionId.value,
-        feedback: refineText.value
-      })
-    })
-    const data = await res.json()
-    
-    // 保存大模型的理由
-    if (data.reasoning) {
-      styleReasoning.value = data.reasoning
-    }
-    
-    if (data.warnings && data.warnings.length > 0) {
-      // Show warning dialog
-      refineWarnings.value = data.warnings
-      pendingRefineConfig.value = data.style_config
-      showRefineWarning.value = true
-      // 如果有理由，也保存到 pending 中
-      if (data.reasoning) {
-        styleReasoning.value = data.reasoning
-      }
-    } else {
-      // Apply new config directly
-      styleConfig.value = data.style_config
-      if (data.style_samples && data.style_samples.length > 0) {
-        styleSamples.value = data.style_samples
-      }
-      refineText.value = ''
-    }
-  } catch (e) {
-    err.value = e.message
-  } finally {
-    refineBusy.value = false
-  }
-}
-
-async function undoStyle() {
-  if (styleHistory.value.length === 0) return
-  const previousConfig = styleHistory.value.pop()
-  styleConfig.value = previousConfig
-  
-  // 同步撤销状态到后端，确保下次 refine 使用正确的基础配置
-  try {
-    const base = getApiBase()
-    await fetch(`${base}/api/workflow/style/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id: sessionId.value,
-        style_config: previousConfig
-      })
-    })
-  } catch (e) {
-    console.warn('Failed to sync undo to backend:', e)
-    // 即使同步失败，本地撤销仍然生效
-  }
-}
-
-function cancelRefine() {
-  showRefineWarning.value = false
-  refineWarnings.value = []
-  pendingRefineConfig.value = null
-  // Pop the history entry we added
-  if (styleHistory.value.length > 0) {
-    styleHistory.value.pop()
-  }
-}
-
-function confirmRefine() {
-  if (pendingRefineConfig.value) {
-    styleConfig.value = pendingRefineConfig.value
-    refineText.value = ''
-  }
-  showRefineWarning.value = false
-  refineWarnings.value = []
-  pendingRefineConfig.value = null
-  // 保留 reasoning，因为已经应用了配置
-}
 
 
 
@@ -1071,8 +745,49 @@ function goToOutlineEditor() {
   background: var(--bg-card);
 }
 
-.style-name-input { display: flex; align-items: center; gap: var(--spacing-3); margin-bottom: var(--spacing-3); }
-.select { width: auto; min-width: 200px; }
+/* 流程信息 */
+.flow-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  margin: var(--spacing-3) 0;
+  padding: var(--spacing-3);
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.flow-badge {
+  background: var(--color-brand);
+  color: var(--text-inverse);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* 简化版配色预览 */
+.style-preview-simple {
+  margin: var(--spacing-4) 0;
+}
+
+.color-row {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
+.color-chip {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  cursor: help;
+  transition: transform var(--duration-fast);
+}
+
+.color-chip:hover {
+  transform: scale(1.1);
+}
 
 /* 风格信息 */
 .style-info {

@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List
+from .security import validate_session_id
 
 
 @dataclass
@@ -30,6 +31,14 @@ def _iso_local(ts: float) -> str:
 
 
 def _log_path(data_dir: str, session_id: str) -> str:
+    # Security: Validate session_id to prevent path traversal
+    try:
+        validate_session_id(session_id)
+    except ValueError:
+        # Fallback for invalid session_id to prevent crash, but ensure safety
+        # In practice, this should be caught earlier
+        session_id = "invalid_session"
+        
     return os.path.join(data_dir, "logs", f"{session_id}.jsonl")
 
 

@@ -330,7 +330,10 @@ PROFESSIONAL_PALETTES["sports"]["background_gradient"] = "linear-gradient(120deg
 
 def choose_style(req: TeachingRequest) -> StyleConfig:
     # 1. Select base template
-    if req.teaching_scene == "practice":
+    # 优先使用 TeachingRequest 中的 style_name（用户指定或3.1自动设置）
+    if req.style_name and req.style_name in STYLE_TEMPLATES:
+        base = STYLE_TEMPLATES[req.style_name]
+    elif req.teaching_scene == "practice":
         base = STYLE_TEMPLATES["practice_steps"]
     elif req.teaching_scene == "review":
         base = STYLE_TEMPLATES["review_mindmap"]

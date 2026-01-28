@@ -7,18 +7,21 @@ from .parser import (
     validate_and_build_questions,
     apply_user_answers,
     autofill_defaults,
-    
+
     # 辅助函数
     detect_professional_category,
     calculate_min_slides,
     check_slide_count_conflict,
-    
+
     # 显示和分布
     generate_display_summary,
     update_page_distribution,
-    
+
     # LLM相关
     recommend_slide_count_with_llm,
+
+    # 风格模板选择（从3.2迁移）
+    select_style_name_by_scene,
 )
 
 __all__ = [
@@ -27,16 +30,19 @@ __all__ = [
     "validate_and_build_questions",
     "apply_user_answers",
     "autofill_defaults",
-    
+
     # 辅助函数
     "detect_professional_category",
     "calculate_min_slides",
     "check_slide_count_conflict",
-    
+
     # 显示和分布
     "generate_display_summary",
     "update_page_distribution",
-    
+
     # LLM相关
     "recommend_slide_count_with_llm",
+
+    # 风格模板选择（从3.2迁移）
+    "select_style_name_by_scene",
 ]
